@@ -1,0 +1,12 @@
+name: kazuto1011-grad-cam-pytorch
+channels:
+  - defaults
+dependencies:
+  - pytorch
+  - torchvision
+  - opencv
+  - click
+  - matplotlib
+  - tqdm
+prefix: C:\Users\Karol\Anaconda3\envs\pytorch
+
