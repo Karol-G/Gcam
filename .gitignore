@@ -104,3 +104,5 @@ ENV/
 .DS_Store
 
 .idea/
+kazuto1011-grad-cam/results/
+1Konny-grad-cam++/outputs/

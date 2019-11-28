@@ -13,7 +13,7 @@ img_dir = 'images'
 # img_name = 'collies.JPG'
 # img_name = 'multiple_dogs.jpg'
 # img_name = 'snake.JPEG'
-img_name = 'water-bird.JPEG'
+img_name = 'cat_dog_original.jpg'
 img_path = os.path.join(img_dir, img_name)
 
 pil_img = PIL.Image.open(img_path)
