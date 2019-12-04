@@ -9,19 +9,22 @@ import pylab
 
 # TODO: Mit ImageDataset Klasse in in main.py mergen?
 # TODO: Checken wie man nur daten batch weise oder so läd
-class TODO_GIVE_NAME():
+class ImageLoader():
     def __init__(self, annotation_filepath, dataset_path):
         self.annotation_filepath = annotation_filepath
         self.dataset_path = dataset_path
 
         # initialize COCO api for instance annotations
         self.coco=COCO(self.annotation_filepath)
+        imgIds = self.coco.getImgIds()
+        imgIds = np.asarray(imgIds)
+        print(imgIds.shape)
 
     def get_image(self, img_id):
         img_infos = self.coco.loadImgs([img_id])[0]
         return io.imread(self.dataset_path+img_infos['file_name'])
 
-    def get_ground_truth(self, img, img_id, category_name):
+    def get_ground_truth(self, img, img_id, category_name=""):
         ground_truth = np.zeros((img.shape[0], img.shape[1]))
         contours = self.get_contours(img_id, category_name)
         for contour in contours:
@@ -30,7 +33,12 @@ class TODO_GIVE_NAME():
         return ground_truth
 
     def get_contours(self, img_id, category_name):
-        annIds = self.coco.getAnnIds(imgIds=[img_id], catIds=[self.get_category_id(category_name)])
+        if category_name == "":
+            print("all")
+            annIds = self.coco.getAnnIds(imgIds=[img_id])
+        else:
+            print("one")
+            annIds = self.coco.getAnnIds(imgIds=[img_id], catIds=[self.get_category_id(category_name)])
         anns = self.coco.loadAnns(annIds)
         contours = []
         for ann in anns:
@@ -49,13 +57,14 @@ class TODO_GIVE_NAME():
 
 
 img_id = 97211
-annotation_filepath = '/home/karol/Documents/coco/annotations_trainval2014/annotations/instances_train2014.json'
-dataset_path = '/home/karol/Documents/coco/train2014/'
-loader = TODO_GIVE_NAME(annotation_filepath, dataset_path)
-img = loader.get_image(97211)
-ground_truth = loader.get_ground_truth(img, img_id, 'person')
-plt.imshow(ground_truth)
-plt.show()
+annotation_filepath = '/data/vilab22/vqa2/coco-annotations/instances_train2014.json'
+dataset_path = '/data/vilab22/vqa2/train2014/'
+loader = ImageLoader(annotation_filepath, dataset_path)
+
+# img = loader.get_image(97211)
+# ground_truth = loader.get_ground_truth(img, img_id)
+# plt.imshow(ground_truth)
+# plt.show()
 
 
 # # display COCO categories and supercategories

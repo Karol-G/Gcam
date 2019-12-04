@@ -22,6 +22,8 @@ from torch.autograd import Variable
 from torchvision import models, transforms
 from torch.utils.data import DataLoader
 from torch.utils.data import Dataset
+import skimage.io as io
+from pycocotools.coco import COCO
 
 from grad_cam import (
     BackPropagation,
@@ -34,7 +36,7 @@ from grad_cam import (
 # if a model includes LSTM, such as in image captioning,
 # torch.backends.cudnn.enabled = False
 
-#os.environ['CUDA_VISIBLE_DEVICES']='2'
+os.environ['CUDA_VISIBLE_DEVICES']='2'
 
 def get_device(cuda):
     cuda = cuda and torch.cuda.is_available()
@@ -95,31 +97,83 @@ model_names = sorted(
     if name.islower() and not name.startswith("__") and callable(models.__dict__[name])
 )
 
-class ImageDataset(Dataset):
-    def __init__(self, path):
-        self.images = []
-        self.raw_images = []
+class ImageDataset():
+    def __init__(self, annotation_filepath, dataset_path):
+        self.annotation_filepath = annotation_filepath
+        self.dataset_path = dataset_path
 
-        valid_images = [".jpg", ".png", ".jpeg"]
-        for f in os.listdir(path):
-            ext = os.path.splitext(f)[1]
-            if ext.lower() not in valid_images:
-                continue
-            image, raw_image = preprocess(os.path.join(path, f))
-            self.images.append(image)
-            self.raw_images.append(raw_image)
+        # initialize COCO api for instance annotations
+        self.coco=COCO(self.annotation_filepath)
+        self.imgIds = self.coco.getImgIds()
 
     def __len__(self):
-        return len(self.images.shape)
+        return len(self.imgIds)
 
     def __getitem__(self, index):
-        return self.images[index]
+        imgId = self.imgIds[index]
+        img = self.get_image(imgId)
+        return {"img": torch.FloatTensor(img, requires_grad=True), "gt": self.get_ground_truth(img, imgId)}
 
-    def get_images(self):
-        return self.images
+    def get_image(self, img_id):
+        img_infos = self.coco.loadImgs([img_id])[0]
+        return io.imread(self.dataset_path+img_infos['file_name'])
 
-    def get_raw_images(self):
-        return self.raw_images
+    def get_ground_truth(self, img, img_id, category_name=""):
+        ground_truth = np.zeros((img.shape[0], img.shape[1]))
+        contours = self.get_contours(img_id, category_name)
+        for contour in contours:
+            contour = contour.astype('int32')
+            cv2.fillPoly(ground_truth, [contour], 255)
+        return ground_truth
+
+    def get_contours(self, img_id, category_name):
+        if category_name == "":
+            annIds = self.coco.getAnnIds(imgIds=[img_id])
+        else:
+            annIds = self.coco.getAnnIds(imgIds=[img_id], catIds=[self.get_category_id(category_name)])
+        anns = self.coco.loadAnns(annIds)
+        contours = []
+        for ann in anns:
+            if 'segmentation' in ann and type(ann['segmentation']) == list:
+                for seg in ann['segmentation']:
+                    contour = np.array(seg).reshape((int(len(seg)/2), 2))
+                    contours.append(contour)
+        return np.asarray(contours)
+
+    def get_category_id(self, category_name):
+        cats = self.coco.loadCats(self.coco.getCatIds())
+        for cat in cats:
+            if cat['name'] == category_name:
+                return cat['id']
+
+# class ImageDataset(Dataset):
+#     def __init__(self, path):
+#         annotation_filepath = '/data/vilab22/vqa2/coco-annotations/instances_train2014.json'
+#         dataset_path = '/data/vilab22/vqa2/train2014/'
+#         loader = ImageLoader(annotation_filepath, dataset_path)
+#         # self.images = []
+#         # self.raw_images = []
+#         #
+#         # valid_images = [".jpg", ".png", ".jpeg"]
+#         # for f in os.listdir(path):
+#         #     ext = os.path.splitext(f)[1]
+#         #     if ext.lower() not in valid_images:
+#         #         continue
+#         #     image, raw_image = preprocess(os.path.join(path, f))
+#         #     self.images.append(image)
+#         #     self.raw_images.append(raw_image)
+#
+#     def __len__(self):
+#         # return len(self.images.shape)
+#
+#     def __getitem__(self, index):
+#         # return self.images[index]
+#
+#     def get_images(self):
+#         # return self.images
+#
+#     def get_raw_images(self):
+#         # return self.raw_images
 
 
 def main(image_paths, target_layer, arch, topk, output_dir, cuda):
@@ -138,11 +192,15 @@ def main(image_paths, target_layer, arch, topk, output_dir, cuda):
     model.to(device)
     model.eval()
 
-    dataset = ImageDataset(image_paths[0])
+    annotation_filepath = '/data/vilab22/vqa2/coco-annotations/instances_train2014.json'
+    dataset_path = '/data/vilab22/vqa2/train2014/'
+    dataset = ImageDataset(annotation_filepath, dataset_path)
+    #dataset = ImageDataset(image_paths[0])
 
     # Images
-    images = dataset.get_images()
-    raw_images = dataset.get_raw_images()
+    #images = dataset.get_images()
+    images = [dataset.__getitem__(0)["img"]]
+    #raw_images = dataset.get_raw_images()
     # print("Images:")
     # for i, image_path in enumerate(image_paths):
     #     print("\t#{}: {}".format(i, image_path))
