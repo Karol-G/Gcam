@@ -36,7 +36,7 @@ from grad_cam import (
 # if a model includes LSTM, such as in image captioning,
 # torch.backends.cudnn.enabled = False
 
-os.environ['CUDA_VISIBLE_DEVICES']='2'
+#os.environ['CUDA_VISIBLE_DEVICES']='2'
 
 def get_device(cuda):
     cuda = cuda and torch.cuda.is_available()
@@ -111,8 +111,14 @@ class ImageDataset():
 
     def __getitem__(self, index):
         imgId = self.imgIds[index]
-        img = self.get_image(imgId)
-        return {"img": torch.FloatTensor(img, requires_grad=True), "gt": self.get_ground_truth(img, imgId)}
+        img = np.asarray(self.get_image(imgId))
+        img_tensor = transforms.Compose(
+            [
+                transforms.ToTensor(),
+                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            ]
+        )(img)
+        return {"img": img_tensor, "gt": self.get_ground_truth(img, imgId)}
 
     def get_image(self, img_id):
         img_infos = self.coco.loadImgs([img_id])[0]
@@ -180,6 +186,9 @@ def main(image_paths, target_layer, arch, topk, output_dir, cuda):
     """
     Visualize model responses given multiple images
     """
+
+    if not cuda:
+        os.environ['CUDA_VISIBLE_DEVICES'] = '2'
 
     device = get_device(cuda)
 
