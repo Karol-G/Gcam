@@ -1,4 +1,4 @@
-name: kazuto1011-grad-cam-pytorch
+name: grad_cam-pytorch
 channels:
   - defaults
 dependencies:

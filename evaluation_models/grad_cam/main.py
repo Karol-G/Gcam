@@ -201,8 +201,8 @@ def main(image_paths, target_layer, arch, topk, output_dir, cuda):
     model.to(device)
     model.eval()
 
-    annotation_filepath = '/data/vilab22/vqa2/coco-annotations/instances_train2014.json'
-    dataset_path = '/data/vilab22/vqa2/train2014/'
+    annotation_filepath = '/visinf/projects_students/shared_vqa/mscoco/coco-annotations/instances_train2014.json'
+    dataset_path = '/visinf/projects_students/shared_vqa/mscoco/train2014/'
     dataset = ImageDataset(annotation_filepath, dataset_path)
     #dataset = ImageDataset(image_paths[0])
 
@@ -281,4 +281,4 @@ def evaluate(gradients, ground_truth):
 
 if __name__ == "__main__":
     #main(["samples/cat_dog.png"], "features.35", "vgg19", 3, "./results", True)
-    main(["samples/"], "features.35", "vgg19", 3, "./results", True)
+    main(["samples/"], "features.35", "vgg19", 3, "results", True)

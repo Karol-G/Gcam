@@ -36,8 +36,7 @@ class _BaseWrapper(object):
         """
         self.model.zero_grad()
         self.logits = self.model(image)
-        self.probs = F.softmax(self.logits, dim=1)
-        return self.probs.sort(dim=1, descending=True)
+        return self.logits
 
     def backward(self, ids):
         """
