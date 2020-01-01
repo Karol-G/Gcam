@@ -52,34 +52,34 @@ def run():
     dataset_len = dataset.__len__()
 
     model = Model(device=DEVICE)
-
-    layer = 'model.module_list.105'
-    model_GCAM = grad_cam.GradCAM(model=model, candidate_layers=[layer])
+    model.eval()
+    #layer = 'model.module_list.93'
+    #layer = 'model.module_list.81'
+    #layer = 'model.module_list.105'
+    layer = 'auto'
+    model_GCAM = grad_cam.GradCAM(model=model)
+    #model_GCAM = grad_cam.GradCAM(model=model, candidate_layers=[layer])
 
     data_loader = DataLoader(dataset, batch_size=1, shuffle=False)
     start = time.time()
 
     for j, batch in enumerate(data_loader):
         print_progress(start, j, dataset_len)
-        _ = model_GCAM.forward(batch["img"])
-        ids = model_GCAM.model.get_ids().long()
-        #ids = model_GCAM.forward(batch["img"])
-        #ids = ids.long()
-
+        probs = model_GCAM.forward(batch["img"])
         #print("probs: {}".format(probs))
-        print("ids: {}".format(ids))
+        classes = model_GCAM.model.get_classes()
 
-        model_GCAM.backward(ids=ids[:, [0]])
+        model_GCAM.backward(ids=0)
         attention_map_GradCAM = model_GCAM.generate(target_layer=layer)
 
         # TODO: Ground truth für alle class names laden? gt wäre dann dictionary von class gt_image?
-        # TODO: Handle batch size
-        print("attention_map_GradCAM: {}".format(attention_map_GradCAM))
+        # TODO: Handle batch size (In demo1 auf github wird richtig gemacht)
+        # print("attention_map_GradCAM: {}".format(attention_map_GradCAM))
         # save_attention_map(filename="/visinf/projects_students/shared_vqa/pythia/attention_maps/gradcam/" + str(annId) + ".npy", attention_map=attention_map_GradCAM)
-        save_attention_map_plain(filename="attention_map.txt", attention_map=attention_map_GradCAM)
-        save_gradcam(filename="001.png", gcam=attention_map_GradCAM, filepath=batch["filepath"][0])
+        # save_attention_map_plain(filename="results/attention_map_" + j + ".txt", attention_map=attention_map_GradCAM)
+        save_gradcam(filename="results/attention_map_" + str(j) + "_" + classes[0] + ".png", gcam=attention_map_GradCAM, filepath=batch["filepath"][0])
 
-        break
+        # break
 
     gc.collect()
     torch.cuda.empty_cache()

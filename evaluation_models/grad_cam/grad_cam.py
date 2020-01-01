@@ -27,6 +27,7 @@ class _BaseWrapper(object):
 
     def _encode_one_hot(self, ids):
         one_hot = torch.zeros_like(self.logits).to(self.device)
+        #print("one_hot: {}".format(one_hot))
         one_hot.scatter_(1, ids, 1.0)
         return one_hot
 
@@ -47,7 +48,9 @@ class _BaseWrapper(object):
         2. (self.logits * one_hot).sum().backward(retain_graph=True)
         """
 
-        one_hot = self._encode_one_hot(ids)
+        #one_hot = self._encode_one_hot(ids)
+        one_hot = torch.zeros_like(self.logits).to(self.device)
+        one_hot[ids] = 1.0
         self.logits.backward(gradient=one_hot, retain_graph=True)
 
     def generate(self):
@@ -109,6 +112,22 @@ class Deconvnet(BackPropagation):
         for module in self.model.named_modules():
             self.handlers.append(module[1].register_backward_hook(backward_hook))
 
+def detach_output(output):
+    if not isinstance(output, torch.Tensor):
+        #print("output type: {}".format(type(output)))
+        tuple_list = []
+        if hasattr(output, '__iter__'):
+            for item in output:
+                if isinstance(output, torch.Tensor):
+                    tuple_list.append(item.detach())
+                else:
+                    tuple_list.append(detach_output(item))
+            return tuple_list
+        else:
+            return output
+    # elif isinstance(output, dict) or isinstance(output, BoxList):
+    #     return output
+    return output.detach()
 
 class GradCAM(_BaseWrapper):
     """
@@ -121,25 +140,34 @@ class GradCAM(_BaseWrapper):
         super(GradCAM, self).__init__(model)
         self.fmap_pool = OrderedDict()
         self.grad_pool = OrderedDict()
+        self.module_names = {}
         self.candidate_layers = candidate_layers  # list
 
         def forward_hook(key):
             def forward_hook_(module, input, output):
                 # Save featuremaps
-                self.fmap_pool[key] = output.detach()
+                #self.fmap_pool[key] = output.detach()
+                self.fmap_pool[key] = detach_output(output)
 
             return forward_hook_
 
         def backward_hook(key):
             def backward_hook_(module, grad_in, grad_out):
                 # Save the gradients correspond to the featuremaps
+                #print("grad_out[0]: {}".format(grad_out[0]))
+                #print("grad_out[0] shape: {}".format(grad_out[0].shape))
                 self.grad_pool[key] = grad_out[0].detach()
+
+                nonzeros = np.count_nonzero(self.grad_pool[key].cpu().numpy())
+                #print("Module name: {}, Non zeros grads: {}".format(self.module_names[module], nonzeros))
 
             return backward_hook_
 
         # If any candidates are not specified, the hook is registered to all the layers.
         for name, module in self.model.named_modules():
             if self.candidate_layers is None or name in self.candidate_layers:
+                #print("Successfully hooked layer: {}".format(name))
+                self.module_names[module] = name
                 self.handlers.append(module.register_forward_hook(forward_hook(name)))
                 self.handlers.append(module.register_backward_hook(backward_hook(name)))
 
@@ -156,10 +184,35 @@ class GradCAM(_BaseWrapper):
         self.image_shape = image.shape[2:]
         return super(GradCAM, self).forward(image)
 
+    def select_highest_layer(self):
+        module_names = []
+        for name, _ in self.model.named_modules():
+            module_names.append(name)
+        module_names.reverse()
+        counter = 0
+        for layer in module_names:
+            try:
+                fmaps = self._find(self.fmap_pool, layer)
+                grads = self._find(self.grad_pool, layer)
+                nonzeros = np.count_nonzero(grads.detach().cpu().numpy())
+                if nonzeros == 0 or not isinstance(fmaps, torch.Tensor) or not isinstance(grads, torch.Tensor):
+                    counter += 1
+                    continue
+                print("Dismissed the last {} module layers (Note: This number can be inflated if the model contains many nested module layers)".format(counter))
+                print("Selected module layer: {}".format(layer))
+                return layer
+            except ValueError:
+                counter += 1
+
     def generate(self, target_layer):
+        if target_layer == "auto":
+            target_layer = self.select_highest_layer()
         fmaps = self._find(self.fmap_pool, target_layer)
         grads = self._find(self.grad_pool, target_layer)
         weights = self._compute_grad_weights(grads)
+        # print("fmaps: {}".format(type(fmaps)))
+        # print("grads: {}".format(grads))
+        # print("weights: {}".format(type(weights)))
 
         gcam = torch.mul(fmaps, weights).sum(dim=1, keepdim=True)
         gcam = F.relu(gcam)

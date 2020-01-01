@@ -26,9 +26,7 @@ class CocoYoloDataset(Dataset):
         img_infos = self.coco.loadImgs([img_id])[0]
         filepath = self.dataset_path+img_infos['file_name']
         img = Image.open(filepath)
-        img.save("test.png")
         if len(np.shape(img)) == 2:
-            print("Convert to RGB")
             img = img.convert('RGB')
         img = transforms.ToTensor()(img)
         img, _ = pad_to_square(img, 0)

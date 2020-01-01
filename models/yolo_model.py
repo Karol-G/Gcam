@@ -19,8 +19,6 @@ class YoloModel(torch.nn.Module):
         self.model.load_darknet_weights(WEIGHTS_PATH)
         self.model.eval()
         self.classes = load_classes(CLASS_PATH)
-        #print("classes: {}".format(self.classes))
-        #print("classes shape: {}".format(np.shape(self.classes)))
 
     def forward(self, batch):
         detections = self.model(batch)
@@ -28,17 +26,15 @@ class YoloModel(torch.nn.Module):
         detections = detections[0][:, 5:]
         detections = detections[detections[:,0].argsort()]
         detections = torch.flip(detections, [0])
-        self.probs = detections[:, :1].squeeze()
-        #self.ids = detections[:, 1:].squeeze()
-        #ids = self.ids.unsqueeze(0) * 0
-        self.ids = detections[:, 1:].squeeze().unsqueeze(0)
-        self.forward_ids = torch.from_numpy(np.fromiter((i for i in range(self.ids.shape[1])), int)).unsqueeze(0)
-
-        # return ids
-        return self.ids
+        self.ids = detections[:, 1:].squeeze(1)
+        self.probs = detections[:, :1].squeeze(1)
+        return self.probs
 
     def get_probs(self):
         return self.probs
 
     def get_ids(self):
-        return self.forward_ids
+        return self.ids
+
+    def get_classes(self):
+        return [self.classes[x] for x in self.ids.long().detach().cpu().numpy()]
