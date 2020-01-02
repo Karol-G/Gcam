@@ -10,7 +10,7 @@ from evaluation_models.grad_cam import grad_cam
 from data.coco_yolo_dataset import CocoYoloDataset as Dataset
 from models.yolo_model import YoloModel as Model
 
-DEVICE = "cpu"
+DEVICE = "cuda"
 
 # FOBIDDEN: To call torch.no_grad, detach, .long(), .float() ... during forward
 
@@ -60,31 +60,37 @@ def run():
     model_GCAM = grad_cam.GradCAM(model=model)
     #model_GCAM = grad_cam.GradCAM(model=model, candidate_layers=[layer])
 
-    data_loader = DataLoader(dataset, batch_size=1, shuffle=False)
+    batch_size = 2
+    data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
     start = time.time()
 
-    for j, batch in enumerate(data_loader):
-        print_progress(start, j, dataset_len)
-        probs = model_GCAM.forward(batch["img"])
-        #print("probs: {}".format(probs))
+    for i, batch in enumerate(data_loader):
+        print_progress(start, i, dataset_len, batch_size)
+        _probs = model_GCAM.forward(batch["img"])
         classes = model_GCAM.model.get_classes()
 
-        model_GCAM.backward(ids=0)
-        attention_map_GradCAM = model_GCAM.generate(target_layer=layer)
+        if classes[0]:
+            model_GCAM.backward(ids=0)
+            attention_map_GradCAM = model_GCAM.generate(target_layer=layer)
 
+        # TODO: Guided-Grad-CAM
+        # TODO: Results mit alten überprüfen
         # TODO: Ground truth für alle class names laden? gt wäre dann dictionary von class gt_image?
         # TODO: Handle batch size (In demo1 auf github wird richtig gemacht)
-        # print("attention_map_GradCAM: {}".format(attention_map_GradCAM))
-        # save_attention_map(filename="/visinf/projects_students/shared_vqa/pythia/attention_maps/gradcam/" + str(annId) + ".npy", attention_map=attention_map_GradCAM)
-        # save_attention_map_plain(filename="results/attention_map_" + j + ".txt", attention_map=attention_map_GradCAM)
-        save_gradcam(filename="results/attention_map_" + str(j) + "_" + classes[0] + ".png", gcam=attention_map_GradCAM, filepath=batch["filepath"][0])
-
-        # break
+        #print("attention_map_GradCAM: {}".format(attention_map_GradCAM))
+        for j in range(batch_size):
+            if classes[j]:
+                # save_attention_map(filename="/visinf/projects_students/shared_vqa/pythia/attention_maps/gradcam/" + str(annId) + ".npy", attention_map=attention_map_GradCAM)
+                # save_attention_map_plain(filename="results/attention_map_" + j + ".txt", attention_map=attention_map_GradCAM)
+                save_gradcam(filename="results/attention_map_" + str(i * batch_size + j) + "_" + classes[j][0] + ".png", gcam=attention_map_GradCAM[j], filepath=batch["filepath"][j])
+            else:
+                save_image(batch["filepath"][j], i * batch_size + j)
 
     gc.collect()
     torch.cuda.empty_cache()
 
-def print_progress(start, j, dataset_len):
+def print_progress(start, j, dataset_len, batch_size):
+    j = j * batch_size
     progress = ((j + 1) / dataset_len) * 100
     elapsed = time.time() - start
     time_per_annotation = elapsed / (j + 1)
@@ -97,8 +103,12 @@ def print_progress(start, j, dataset_len):
     minutes = finished_in // 60
     finished_in %= 60
     seconds = finished_in
-    print("Iteration: {} | Progress: {}% | Finished in: {}d {}h {}m {}s | Time Per Annotation: {}s".format(j, round(
+    print("Iteration: {} | Progress: {}% | Finished in: {}d {}h {}m {}s | Time Per Batch: {}s".format(j, round(
         progress, 6), round(day), round(hour), round(minutes), round(seconds), round(time_per_annotation, 2)))
+
+def save_image(filepath, index):
+    raw_image = cv2.imread(filepath)
+    cv2.imwrite("results/attention_map_" + str(index) + "_None.png", raw_image)
 
 
 def print_layer_names():

@@ -27,7 +27,6 @@ class _BaseWrapper(object):
 
     def _encode_one_hot(self, ids):
         one_hot = torch.zeros_like(self.logits).to(self.device)
-        #print("one_hot: {}".format(one_hot))
         one_hot.scatter_(1, ids, 1.0)
         return one_hot
 
@@ -50,7 +49,8 @@ class _BaseWrapper(object):
 
         #one_hot = self._encode_one_hot(ids)
         one_hot = torch.zeros_like(self.logits).to(self.device)
-        one_hot[ids] = 1.0
+        for one_hot_x in one_hot:
+            one_hot_x[ids] = 1.0
         self.logits.backward(gradient=one_hot, retain_graph=True)
 
     def generate(self):
@@ -114,7 +114,6 @@ class Deconvnet(BackPropagation):
 
 def detach_output(output):
     if not isinstance(output, torch.Tensor):
-        #print("output type: {}".format(type(output)))
         tuple_list = []
         if hasattr(output, '__iter__'):
             for item in output:
@@ -125,8 +124,6 @@ def detach_output(output):
             return tuple_list
         else:
             return output
-    # elif isinstance(output, dict) or isinstance(output, BoxList):
-    #     return output
     return output.detach()
 
 class GradCAM(_BaseWrapper):
@@ -154,11 +151,8 @@ class GradCAM(_BaseWrapper):
         def backward_hook(key):
             def backward_hook_(module, grad_in, grad_out):
                 # Save the gradients correspond to the featuremaps
-                #print("grad_out[0]: {}".format(grad_out[0]))
-                #print("grad_out[0] shape: {}".format(grad_out[0].shape))
                 self.grad_pool[key] = grad_out[0].detach()
-
-                nonzeros = np.count_nonzero(self.grad_pool[key].cpu().numpy())
+                #nonzeros = np.count_nonzero(self.grad_pool[key].cpu().numpy())
                 #print("Module name: {}, Non zeros grads: {}".format(self.module_names[module], nonzeros))
 
             return backward_hook_
@@ -185,35 +179,38 @@ class GradCAM(_BaseWrapper):
         return super(GradCAM, self).forward(image)
 
     def select_highest_layer(self):
+        fmap_list, weight_list = [], []
         module_names = []
         for name, _ in self.model.named_modules():
             module_names.append(name)
         module_names.reverse()
-        counter = 0
-        for layer in module_names:
-            try:
-                fmaps = self._find(self.fmap_pool, layer)
-                grads = self._find(self.grad_pool, layer)
-                nonzeros = np.count_nonzero(grads.detach().cpu().numpy())
-                if nonzeros == 0 or not isinstance(fmaps, torch.Tensor) or not isinstance(grads, torch.Tensor):
+        for i in range(self.logits.shape[0]):
+            counter = 0
+            for layer in module_names:
+                try:
+                    fmaps = self._find(self.fmap_pool, layer)
+                    np.shape(fmaps) # Throws error without this line, I have no idea why...
+                    fmaps = fmaps[i]
+                    grads = self._find(self.grad_pool, layer)[i]
+                    nonzeros = np.count_nonzero(grads.detach().cpu().numpy())
+                    self._compute_grad_weights(grads)
+                    if nonzeros == 0 or not isinstance(fmaps, torch.Tensor) or not isinstance(grads, torch.Tensor):
+                        counter += 1
+                        continue
+                    print("Dismissed the last {} module layers (Note: This number can be inflated if the model contains many nested module layers)".format(counter))
+                    print("Selected module layer: {}".format(layer))
+                    fmap_list.append(self._find(self.fmap_pool, layer)[i])
+                    grads = self._find(self.grad_pool, layer)[i]
+                    weight_list.append(self._compute_grad_weights(grads))
+                    break
+                except ValueError:
                     counter += 1
-                    continue
-                print("Dismissed the last {} module layers (Note: This number can be inflated if the model contains many nested module layers)".format(counter))
-                print("Selected module layer: {}".format(layer))
-                return layer
-            except ValueError:
-                counter += 1
+                except RuntimeError:
+                    counter += 1
 
-    def generate(self, target_layer):
-        if target_layer == "auto":
-            target_layer = self.select_highest_layer()
-        fmaps = self._find(self.fmap_pool, target_layer)
-        grads = self._find(self.grad_pool, target_layer)
-        weights = self._compute_grad_weights(grads)
-        # print("fmaps: {}".format(type(fmaps)))
-        # print("grads: {}".format(grads))
-        # print("weights: {}".format(type(weights)))
+        return fmap_list, weight_list
 
+    def generate_helper(self, fmaps, weights):
         gcam = torch.mul(fmaps, weights).sum(dim=1, keepdim=True)
         gcam = F.relu(gcam)
 
@@ -226,6 +223,23 @@ class GradCAM(_BaseWrapper):
         gcam -= gcam.min(dim=1, keepdim=True)[0]
         gcam /= gcam.max(dim=1, keepdim=True)[0]
         gcam = gcam.view(B, C, H, W)
+
+        return gcam
+
+    def generate(self, target_layer):
+        if target_layer == "auto":
+            fmaps, weights = self.select_highest_layer()
+            gcam = []
+            for i in range(self.logits.shape[0]):
+                gcam.append(self.generate_helper(fmaps[i].unsqueeze(0), weights[i].unsqueeze(0)))
+        else:
+            fmaps = self._find(self.fmap_pool, target_layer)
+            grads = self._find(self.grad_pool, target_layer)
+            weights = self._compute_grad_weights(grads)
+            gcam_tensor = self.generate_helper(fmaps, weights)
+            gcam = []
+            for i in range(self.logits.shape[0]):
+                gcam.append(gcam_tensor[i])
 
         return gcam
 
