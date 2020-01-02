@@ -59,6 +59,7 @@ def run():
     layer = 'auto'
     model_GCAM = grad_cam.GradCAM(model=model)
     #model_GCAM = grad_cam.GradCAM(model=model, candidate_layers=[layer])
+    model_GBP = grad_cam.GuidedBackPropagation(model=model)
 
     batch_size = 2
     data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
@@ -66,23 +67,27 @@ def run():
 
     for i, batch in enumerate(data_loader):
         print_progress(start, i, dataset_len, batch_size)
-        _probs = model_GCAM.forward(batch["img"])
+        _ = model_GCAM.forward(batch["img"])
+        _ = model_GBP.forward(batch["img"])
         classes = model_GCAM.model.get_classes()
 
-        if classes[0]:
+        if classes[0]: # Only if object are detected
+            model_GBP.backward(ids=0)
+            attention_map_GBP = model_GBP.generate()
             model_GCAM.backward(ids=0)
-            attention_map_GradCAM = model_GCAM.generate(target_layer=layer)
+            attention_map_GCAM = model_GCAM.generate(target_layer=layer)
 
         # TODO: Guided-Grad-CAM
         # TODO: Results mit alten überprüfen
         # TODO: Ground truth für alle class names laden? gt wäre dann dictionary von class gt_image?
-        # TODO: Handle batch size (In demo1 auf github wird richtig gemacht)
+
         #print("attention_map_GradCAM: {}".format(attention_map_GradCAM))
         for j in range(batch_size):
             if classes[j]:
-                # save_attention_map(filename="/visinf/projects_students/shared_vqa/pythia/attention_maps/gradcam/" + str(annId) + ".npy", attention_map=attention_map_GradCAM)
-                # save_attention_map_plain(filename="results/attention_map_" + j + ".txt", attention_map=attention_map_GradCAM)
-                save_gradcam(filename="results/attention_map_" + str(i * batch_size + j) + "_" + classes[j][0] + ".png", gcam=attention_map_GradCAM[j], filepath=batch["filepath"][j])
+                # save_attention_map(filename="/visinf/projects_students/shared_vqa/pythia/attention_maps/gradcam/" + str(annId) + ".npy", attention_map=attention_map_GCAM)
+                # save_attention_map_plain(filename="results/attention_map_" + j + ".txt", attention_map=attention_map_GCAM)
+                save_gradcam(filename="results/gcam/attention_map_" + str(i * batch_size + j) + "_" + classes[j][0] + ".png", gcam=attention_map_GCAM[j], filepath=batch["filepath"][j])
+                save_gradient(filename="results/guided-gcam/attention_map_" + str(i * batch_size + j) + "_" + classes[j][0] + ".png", gradient=torch.mul(attention_map_GCAM[j], attention_map_GBP[j]))
             else:
                 save_image(batch["filepath"][j], i * batch_size + j)
 
