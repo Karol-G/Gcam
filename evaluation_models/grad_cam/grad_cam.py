@@ -38,7 +38,7 @@ class _BaseWrapper(object):
         self.logits = self.model(image)
         return self.logits
 
-    def backward(self, ids):
+    def backward(self, ids, is_backward_ready=False):
         """
         Class-specific backpropagation
 
@@ -47,11 +47,14 @@ class _BaseWrapper(object):
         2. (self.logits * one_hot).sum().backward(retain_graph=True)
         """
 
-        #one_hot = self._encode_one_hot(ids)
-        one_hot = torch.zeros_like(self.logits).to(self.device)
-        for one_hot_x in one_hot:
-            one_hot_x[ids] = 1.0
-        self.logits.backward(gradient=one_hot, retain_graph=True)
+        if is_backward_ready:
+            self.logits.backward(gradient=self.logits, retain_graph=True)
+        else:
+            #one_hot = self._encode_one_hot(ids)
+            one_hot = torch.zeros_like(self.logits).to(self.device)
+            for one_hot_x in one_hot:
+                one_hot_x[ids] = 1.0
+            self.logits.backward(gradient=one_hot, retain_graph=True)
 
     def generate(self):
         raise NotImplementedError
@@ -226,7 +229,7 @@ class GradCAM(_BaseWrapper):
 
         return gcam
 
-    def generate(self, target_layer):
+    def generate(self, target_layer, dim=2):
         if target_layer == "auto":
             fmaps, weights = self.select_highest_layer()
             gcam = []
@@ -239,8 +242,8 @@ class GradCAM(_BaseWrapper):
             gcam_tensor = self.generate_helper(fmaps, weights)
             gcam = []
             for i in range(self.logits.shape[0]):
-                gcam.append(gcam_tensor[i])
-
+                tmp = gcam_tensor[i].unsqueeze(0)
+                gcam.append(tmp)
         return gcam
 
 

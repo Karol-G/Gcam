@@ -55,3 +55,6 @@ class YoloModel(torch.nn.Module):
 
     def get_classes(self):
         return self.pred_classes
+
+    def is_backward_ready(self):
+        return False

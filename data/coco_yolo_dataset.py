@@ -5,17 +5,24 @@ from PIL import Image
 from torch.utils.data import Dataset
 from data.cocoapi_master.PythonAPI.pycocotools.coco import COCO
 from models.yolo.utils.datasets import pad_to_square, resize
+from models.yolo.utils.utils import load_classes
 
+ANNOTATION_FILEPATH = '/visinf/projects_students/shared_vqa/mscoco/coco-annotations/instances_train2014.json'
+DATASET_PATH = '/visinf/projects_students/shared_vqa/mscoco/train2014/'
+CLASS_PATH = "models/yolo/data/coco.names"
 IMG_SIZE = 416
 
 class CocoYoloDataset(Dataset):
-    def __init__(self, annotation_filepath, dataset_path, device):
-        self.annotation_filepath = annotation_filepath
-        self.dataset_path = dataset_path
+    def __init__(self, device):
+        self.annotation_filepath = ANNOTATION_FILEPATH
+        self.dataset_path = DATASET_PATH
         self.device = device
 
         # initialize COCO api for instance annotations
         self.coco=COCO(self.annotation_filepath)
+        coco_cat_names = self._get_all_categories()
+        yolo_cat_names = load_classes(CLASS_PATH)
+        self.categories = self._intersection(coco_cat_names, yolo_cat_names)
         self.imgIds = self.coco.getImgIds()
 
     def __len__(self):
@@ -61,6 +68,16 @@ class CocoYoloDataset(Dataset):
         for cat in cats:
             if cat['name'] == category_name:
                 return cat['id']
+
+    def _get_all_categories(self):
+        cats = self.coco.loadCats(self.coco.getCatIds())
+        coco_cat_names = []
+        for cat in cats:
+            coco_cat_names.append(cat['name'])
+        return coco_cat_names
+
+    def _intersection(self, lst1, lst2):
+        return list(set(lst1).intersection(lst2))
 
 class CocoYoloDatasetSingle(Dataset):
     def __init__(self, annotation_filepath, dataset_path, device):

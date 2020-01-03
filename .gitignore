@@ -106,3 +106,6 @@ ENV/
 .idea/
 evaluation_models/grad_cam/results/
 evaluation_models/grad_cam_plus_plus/outputs/
+data/tumor_seg_data/
+
+models/tumor_seg/images/
