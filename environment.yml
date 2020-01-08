@@ -2,11 +2,12 @@ name: grad-cam
 channels:
   - defaults
 dependencies:
-  - matplotlib
-  - opencv
-  - pytorch
+  - jupyter
   - click
   - tqdm
   - scikit-image
-  - jupyter
-
+  - pytorch
+  - opencv
+  - matplotlib
+  - torchvision
+  - pillow=6.1
