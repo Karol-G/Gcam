@@ -40,39 +40,15 @@ class TumorSegModel(torch.nn.Module):
         self.output[self.output != 0] = 1
 
         output_numpy = self.output.detach().cpu().numpy()
-        self.classes = []
+        self.classes, self.is_ok = [], []
         for x in output_numpy:
             nonzero = np.count_nonzero(x)
             if nonzero > 0:
                 self.classes.append(["tumor"])
+                self.is_ok.append(True)
             else:
                 self.classes.append(["no_tumor"])
-
-        # self.classes = []
-        # self.ids = []
-        # for x in self.output:
-        #     x = torch.max(x)
-        #     if torch.sum(x) > 0:
-        #         self.classes.append(["tumor"])
-        #     else:
-        #         self.classes.append(["no_tumor"])
-        #     x = x.unsqueeze(0)
-        #     self.ids.append(x)
-        # self.ids = torch.stack(self.ids)
-        # print("self.ids: {}".format(self.ids))
-        # print("self.ids shape: {}".format(self.ids.shape))
-
-        # _probs = []
-        # for x in self.output:
-        #     x = torch.flatten(x)
-        #     print("x shape: {}".format(x.shape))
-        #     classify = torch.nn.Linear(x.shape[0], 1).to(self.device)
-        #     classify.weight.data.fill_(1.0)
-        #     x = classify(x)
-        #     _probs.append(x)
-        #     print("x: {}".format(x))
-        # _probs = torch.stack(_probs)
-        # print("_probs: {}".format(_probs))
+                self.is_ok.append(False)
 
         return self.output
 
@@ -84,3 +60,6 @@ class TumorSegModel(torch.nn.Module):
 
     def get_mask(self):
         return self.mask
+
+    def get_ok_list(self):
+        return self.is_ok

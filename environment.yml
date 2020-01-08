@@ -1,12 +1,12 @@
-name: grad_cam-pytorch
+name: grad-cam
 channels:
   - defaults
 dependencies:
-  - pytorch
-  - torchvision
-  - opencv
-  - click
   - matplotlib
+  - opencv
+  - pytorch
+  - click
   - tqdm
-prefix: C:\Users\Karol\Anaconda3\envs\pytorch
+  - scikit-image
+  - jupyter
 

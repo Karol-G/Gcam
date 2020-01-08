@@ -4,6 +4,7 @@ import torchvision.transforms.functional as TF
 from PIL import Image
 import os
 import random
+import numpy as np
 
 ROOT_DIR = "/visinf/home/vilab22/Documents/RemoteProjects/cnn_interpretability/data/tumor_seg_data"
 TRANSFORM = False
@@ -64,7 +65,8 @@ class TumorDataset(Dataset):
             image, mask = self._random_transform(image, mask)
 
         image = TF.to_tensor(image)
-        mask = TF.to_tensor(mask)
+        mask = np.array(mask, dtype=np.uint8)
+        #mask = TF.to_tensor(mask).squeeze()
 
         image = image.to(self.device)
         sample = {"img": image, "gt": mask, "filepath": image_name}

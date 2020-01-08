@@ -24,6 +24,7 @@ class _BaseWrapper(object):
         self.device = next(model.parameters()).device
         self.model = model
         self.handlers = []  # a set of hook function handlers
+        self.is_backward_ready = self.model.is_backward_ready()
 
     def _encode_one_hot(self, ids):
         one_hot = torch.zeros_like(self.logits).to(self.device)
@@ -38,7 +39,7 @@ class _BaseWrapper(object):
         self.logits = self.model(image)
         return self.logits
 
-    def backward(self, ids, is_backward_ready=False):
+    def backward(self):
         """
         Class-specific backpropagation
 
@@ -47,13 +48,14 @@ class _BaseWrapper(object):
         2. (self.logits * one_hot).sum().backward(retain_graph=True)
         """
 
-        if is_backward_ready:
+        if self.is_backward_ready:
             self.logits.backward(gradient=self.logits, retain_graph=True)
         else:
+            ids = self.model.get_category_id_pos()
             #one_hot = self._encode_one_hot(ids)
             one_hot = torch.zeros_like(self.logits).to(self.device)
-            for one_hot_x in one_hot:
-                one_hot_x[ids] = 1.0
+            for i in range(one_hot.shape[0]):
+                one_hot[i, ids[i]] = 1.0
             self.logits.backward(gradient=one_hot, retain_graph=True)
 
     def generate(self):
@@ -187,6 +189,7 @@ class GradCAM(_BaseWrapper):
         for name, _ in self.model.named_modules():
             module_names.append(name)
         module_names.reverse()
+
         for i in range(self.logits.shape[0]):
             counter = 0
             for layer in module_names:
@@ -195,7 +198,16 @@ class GradCAM(_BaseWrapper):
                     np.shape(fmaps) # Throws error without this line, I have no idea why...
                     fmaps = fmaps[i]
                     grads = self._find(self.grad_pool, layer)[i]
+                    # print("counter: {}".format(counter))
+                    # print("fmaps shape: {}".format(np.shape(fmaps)))
+                    # print("grads shape: {}".format(np.shape(grads)))
                     nonzeros = np.count_nonzero(grads.detach().cpu().numpy())
+                    # if True: #counter < 100:
+                    #     print("counter: {}".format(counter))
+                    #     #print("fmaps: {}".format(fmaps))
+                    #     print("nonzeros: {}".format(nonzeros))
+                    #     print("fmaps shape: {}".format(np.shape(fmaps)))
+                    #     print("grads shape: {}".format(np.shape(grads)))
                     self._compute_grad_weights(grads)
                     if nonzeros == 0 or not isinstance(fmaps, torch.Tensor) or not isinstance(grads, torch.Tensor):
                         counter += 1
