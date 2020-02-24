@@ -104,8 +104,14 @@ ENV/
 .DS_Store
 
 .idea/
-evaluation_models/grad_cam/results/
-evaluation_models/grad_cam_plus_plus/outputs/
+gcam/grad_cam/results/
+gcam/grad_cam_plus_plus/outputs/
 data/tumor_seg_data/
 
 models/tumor_seg/images/
+
+data/unet_seg/
+
+data/Task05_Prostate/
+
+results/

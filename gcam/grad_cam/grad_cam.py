@@ -157,8 +157,8 @@ class GradCAM(_BaseWrapper):
             def backward_hook_(module, grad_in, grad_out):
                 # Save the gradients correspond to the featuremaps
                 self.grad_pool[key] = grad_out[0].detach()
-                #nonzeros = np.count_nonzero(self.grad_pool[key].cpu().numpy())
-                #print("Module name: {}, Non zeros grads: {}".format(self.module_names[module], nonzeros))
+                # nonzeros = np.count_nonzero(self.grad_pool[key].cpu().numpy())
+                # print("Module name: {}, Non zeros grads: {}".format(self.module_names[module], nonzeros))
 
             return backward_hook_
 

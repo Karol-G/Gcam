@@ -5,10 +5,8 @@ from PIL import Image
 import os
 import random
 import numpy as np
-from root_dir import ROOT_DIR
 
-#DATASET_DIR = "/visinf/home/vilab22/Documents/RemoteProjects/cnn_interpretability/data/tumor_seg_data"
-DATASET_DIR = os.path.join(ROOT_DIR, 'data/tumor_seg_data')
+ROOT_DIR = "../data/tumor_seg_data"
 TRANSFORM = False
 DEBUG = False
 
@@ -27,7 +25,7 @@ class TumorDataset(Dataset):
         Returns: None
         """
         self.device = device
-        self.dataset_dir = DATASET_DIR
+        self.root_dir = ROOT_DIR
         self.transform = {'hflip': TF.hflip,
                           'vflip': TF.vflip,
                           'rotate': TF.rotate}
@@ -53,8 +51,8 @@ class TumorDataset(Dataset):
                         'mask' : Contains the mask image torch.Tensor.
         """
         index += 3000
-        image_name = os.path.join(self.dataset_dir, str(index) + '.png')
-        mask_name = os.path.join(self.dataset_dir, str(index) + '_mask.png')
+        image_name = os.path.join(self.root_dir, str(index)+'.png')
+        mask_name = os.path.join(self.root_dir, str(index)+'_mask.png')
 
         image = Image.open(image_name)
         mask = Image.open(mask_name)
@@ -105,7 +103,86 @@ class TumorDataset(Dataset):
         len(self) returns the size of the dataset.
         """
         error_msg = 'Part of dataset is missing!\nNumber of tumor and mask images are not same.'
-        total_files = len(os.listdir(self.dataset_dir))
+        total_files = len(os.listdir(self.root_dir))
 
         assert (total_files % 2 == 0), error_msg
         return total_files//2
+
+
+import torch
+import numpy as np
+import os
+from models.tumor_seg.bts.model import DynamicUNet
+
+FILTER_LIST = [16,32,64,128,256]
+MODEL_NAME = f"UNet-{FILTER_LIST}.pt"
+STATE_DICT_PATH = '../models/tumor_seg/saved_models/'
+THRESHOLD = 0.5
+
+class TumorSegModel(torch.nn.Module):
+
+    def __init__(self, device):
+        super(TumorSegModel, self).__init__()
+        self.device = device
+        self.model = DynamicUNet(FILTER_LIST).to(self.device)
+        self.restore_model(os.path.join(STATE_DICT_PATH, MODEL_NAME))
+        self.model.eval()
+
+    def restore_model(self, path):
+        """ Loads the saved model and restores it to the "model" object.
+        Loads the model based on device used for computation.(CPU/GPU)
+        Follows the best method recommended by Pytorch
+        Link: https://pytorch.org/tutorials/beginner/saving_loading_models.html#save-load-state-dict-recommended
+        Parameters:
+            path(str): The file location where the model is saved.
+        Returns:
+            None
+        """
+        if self.device == 'cpu':
+            self.model.load_state_dict(torch.load(path, map_location=self.device))
+        else:
+            self.model.load_state_dict(torch.load(path))
+            self.model.to(self.device)
+
+    def forward(self, batch):
+        self.output = self.model(batch)
+        self.mask = (self.output > THRESHOLD)
+        self.output = self.output * self.mask
+        self.output[self.output != 0] = 1
+
+        output_numpy = self.output.detach().cpu().numpy()
+        self.classes, self.is_ok = [], []
+        for x in output_numpy:
+            nonzero = np.count_nonzero(x)
+            if nonzero > 0:
+                self.classes.append(["tumor"])
+                self.is_ok.append(True)
+            else:
+                self.classes.append(["no_tumor"])
+                self.is_ok.append(False)
+
+        return self.output
+
+    def get_classes(self):
+        return self.classes
+
+    def is_backward_ready(self):
+        return True
+
+    def get_mask(self):
+        return self.mask
+
+    def get_ok_list(self):
+        return self.is_ok
+
+
+# if __name__ == "__main__":
+#     DEVICE = "cpu"
+#     dataset = TumorDataset(device=DEVICE)
+#     model = TumorSegModel(device=DEVICE)
+#
+#
+#     import run_grad_cam
+#
+#     image_GCAM, image_GGCAM = run_grad_cam.run(model, dataset.__getitem__(0))
+#     print("Test")

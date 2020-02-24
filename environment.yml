@@ -1,13 +1,17 @@
-name: grad-cam
+name: gcam
 channels:
   - defaults
 dependencies:
-  - jupyter
-  - click
-  - tqdm
-  - scikit-image
-  - pytorch
   - opencv
+  - scikit-image
+  - jupyter
   - matplotlib
+  - tqdm
+  - pytorch
+  - cudatoolkit=10.1
   - torchvision
-  - pillow=6.1
+  - dicom2nifti
+  - simpleitk
+  - pandas
+  - medpy
+
