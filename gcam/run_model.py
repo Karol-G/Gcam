@@ -3,21 +3,26 @@ import gc
 from torch.utils.data import DataLoader
 from torchviz import make_dot, make_dot_from_trace
 import matplotlib.pyplot as plt
+import numpy as np
 
-def run(model, dataset):
+def run(model, dataset, iterations=10):
     model.eval()
     data_loader = DataLoader(dataset, batch_size=1, shuffle=False)
 
-    #for batch in data_loader:
+    outputs = []
     for i, batch in enumerate(data_loader):
         output = model(batch["img"])
+        outputs.append(output)
         #print("output: {}".format(output))
-        graph = make_dot(output, params=dict(model.named_parameters()))
-        print(graph)
-        break
+        # graph = make_dot(output, params=dict(model.named_parameters()))
+        # print(graph)
+        if i >= iterations:
+            break
 
     gc.collect()
     torch.cuda.empty_cache()
+
+    return np.asarray(outputs)
 
 if __name__ == "__main__":
     # from models.deepdyn_model import DeepdynModel as Model

@@ -10,7 +10,24 @@ import unittest
 
 class TestSegmentation(unittest.TestCase):
 
-    def test_segmentation(self):
+    def test_forward_disabled(self):
+        DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        dataset = Dataset(device=DEVICE)
+        model = Model(device=DEVICE)
+        outputs = gcam.forward_disabled(model, dataset, iterations=2)
+        assert outputs[0].shape == (1, 1, 384, 575)
+        assert outputs[1].shape == (1, 1, 384, 575)
+
+    def test_forward_gcam(self):
+        DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        dataset = Dataset(device=DEVICE)
+        model = Model(device=DEVICE)
+        batch = dataset.__getitem__(0)
+        heatmap_gcam, heatmap_guided_gcam = gcam.forward_gcam(model, batch, layer='model.outc.conv')
+        assert heatmap_gcam.shape == (1, 384, 575, 3)
+        assert heatmap_guided_gcam.shape == (1, 384, 575)
+
+    def test_evaluation_gcam(self):
         if os.path.isdir("results"):
             shutil.rmtree("results")
         DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')

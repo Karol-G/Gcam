@@ -1,11 +1,10 @@
-import torch
+import numpy as np
 from gcam.grad_cam import grad_cam
 from gcam.grad_cam.gradcam_utils import *
 
 
-def run(model, batch):
+def run(model, batch, layer='auto'):
     model.eval()
-    layer = 'auto'
     model_GCAM = grad_cam.GradCAM(model=model)
     # model_GCAM = grad_cam.GradCAM(model=model, candidate_layers=[layer])
     model_GBP = grad_cam.GuidedBackPropagation(model=model)
@@ -22,9 +21,17 @@ def run(model, batch):
             model_GCAM.backward()
             attention_map_GCAM = model_GCAM.generate(target_layer=layer, dim=2)[0]
 
-        if is_ok[0]:
-            image_GCAM = save_gcam(gcam=attention_map_GCAM, filepath=batch["filepath"])
-            image_GGCAM = save_guided_gcam(guided_gcam=torch.mul(attention_map_GCAM, attention_map_GBP))
-            return image_GCAM, image_GGCAM
-        else:
-            return batch["img"], batch["img"]
+        image_GCAM = []
+        image_GGCAM = []
+        batch_size = batch["img"].shape[0]
+        for j in range(batch_size):
+            if is_ok[j]:
+                map_GCAM_j = attention_map_GCAM[j].squeeze().cpu().numpy()
+                map_GBP_j = attention_map_GBP[j].squeeze().cpu().numpy()
+                img = batch["img"][j].squeeze().detach().cpu().numpy().transpose(1, 2, 0)
+                image_GCAM.append(generate_gcam(gcam=map_GCAM_j, raw_image=img))
+                image_GGCAM.append(generate_guided_gcam(gcam=map_GCAM_j, guided_bp=map_GBP_j))
+            else:
+                image_GCAM.append(batch["img"][j])
+                image_GGCAM.append(batch["img"][j])
+    return np.asarray(image_GCAM), np.asarray(image_GGCAM)
