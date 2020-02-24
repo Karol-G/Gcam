@@ -15,10 +15,11 @@ ATTENTION_THRESHOLD = 80
 DILATE = 0
 SAVE_ALL_RESULTS = True
 SAVE_BAD_RESULTS = True
-RESULT_DIR = "../results/gcam/"
 
-def evaluate_dataset(model, dataset, layer='auto'):
-    Path(RESULT_DIR + layer).mkdir(parents=True, exist_ok=True)
+def evaluate_dataset(model, dataset, result_dir, layer='auto'):
+    Path(result_dir).mkdir(parents=True, exist_ok=True)
+    result_dir = result_dir + "/" + layer
+    Path(result_dir).mkdir(parents=True, exist_ok=True)
     dataset_len = dataset.__len__()
     model.eval()
     model_GCAM = grad_cam.GradCAM(model=model)
@@ -63,12 +64,12 @@ def evaluate_dataset(model, dataset, layer='auto'):
                     overlap_percentage.append(overlap_score)
                     if SAVE_ALL_RESULTS or (SAVE_BAD_RESULTS and overlap_score < OVERLAP_SCORE_THRESHOLD):
                         # save_attention_map(filename="/visinf/projects_students/shared_vqa/pythia/attention_maps/gradcam/" + str(annId) + ".npy", attention_map=map_GCAM_j)
-                        save_gcam(filename=RESULT_DIR + layer + "/attention_map_" + str(i * batch_size + j) + "_score_" + str(round(overlap_score * 100)) + ".png", gcam=map_GCAM_j, raw_image=img)
+                        save_gcam(filename=result_dir + "/attention_map_" + str(i * batch_size + j) + "_score_" + str(round(overlap_score * 100)) + ".png", gcam=map_GCAM_j, raw_image=img)
                         # save_guided_gcam(filename="results/guided-gcam/attention_map_" + str(i * batch_size + j) + ".png", gcam=map_GCAM_j, guided_bp=map_GBP_j)
                         print("Attention map saved.")
                 else:
                     print("Warning: No class detected in the {}-th image of batch {}!".format(j, i))
-                    #save_image(batch["filepath"][j], i * batch_size + j)
+                    #save_image(batch["filepath"][j], i * batch_size + j, result_dir)
                     overlap_percentage.append(0.0)
 
             avg_overlap_percentage = sum(overlap_percentage) / len(overlap_percentage)
@@ -77,8 +78,8 @@ def evaluate_dataset(model, dataset, layer='auto'):
             if i == 10:
                 break
 
-    np.savetxt("results/overlap_percentage.txt", overlap_percentage)
-    np.save("results/overlap_percentage", overlap_percentage)
+    np.savetxt(result_dir + "/overlap_percentage.txt", overlap_percentage)
+    np.save(result_dir + "/overlap_percentage", overlap_percentage)
     gc.collect()
     torch.cuda.empty_cache()
 
@@ -104,9 +105,9 @@ def print_progress(start, j, dataset_len, batch_size):
     print("Iteration: {} | Progress: {}% | Finished in: {}d {}h {}m {}s | Time Per Batch: {}s".format(j, round(
         progress, 6), round(day), round(hour), round(minutes), round(seconds), round(time_per_annotation, 2)))
 
-def save_image(filepath, index):
+def save_image(filepath, index, result_dir):
     raw_image = cv2.imread(filepath)
-    cv2.imwrite("results/attention_map_" + str(index) + "_None.png", raw_image)
+    cv2.imwrite(result_dir + "attention_map_" + str(index) + "_None.png", raw_image)
 
 def evaluate_image(attention_map, ground_truth): # This evaluation is not suposed to be IoU
     #attention_map = attention_map.squeeze().cpu().numpy()
@@ -175,4 +176,4 @@ if __name__ == "__main__":
               'model.down1.maxpool_conv.1.double_conv.1']
 
     for layer in layers:
-        evaluate_dataset(model, dataset, layer=layer)
+        evaluate_dataset(model, dataset, "../results", layer=layer)

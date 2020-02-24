@@ -1,0 +1,14 @@
+name: deepdyn_example
+channels:
+  - defaults
+dependencies:
+  - torchvision
+  - cudatoolkit=10.1
+  - pytorch
+  - pandas
+  - matplotlib
+  - pillow
+  - scikit-learn
+  - opencv
+  - scikit-image
+
