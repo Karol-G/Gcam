@@ -1,13 +1,15 @@
 import numpy as np
 from gcam.grad_cam import grad_cam
 from gcam.grad_cam.gradcam_utils import *
+import inspect
 
 
 def run(model, batch, layer='auto', input_key="img"):
     model.eval()
-    model_GCAM = grad_cam.GradCAM(model=model)
-    # model_GCAM = grad_cam.GradCAM(model=model, candidate_layers=[layer])
-    model_GBP = grad_cam.GuidedBackPropagation(model=model)
+    model_base = type(model).__bases__[0]
+    model_GCAM = grad_cam.create_grad_cam(model_base)(model=model)
+    # model_GCAM = grad_cam.create_grad_cam(object)(model=model, candidate_layers=[layer])
+    model_GBP = grad_cam.create_guided_back_propagation(model_base)(model=model)
 
     with torch.enable_grad():
         batch[input_key] = torch.tensor(batch[input_key]).unsqueeze(0)

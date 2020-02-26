@@ -34,9 +34,10 @@ def evaluate_dataset(model, dataset, output_dir=None, layer='auto', input_key="i
         Path(output_dir).mkdir(parents=True, exist_ok=True)
     dataset_len = dataset.__len__()
     model.eval()
-    model_GCAM = grad_cam.GradCAM(model=model)
-    #model_GCAM = grad_cam.GradCAM(model=model, candidate_layers=[layer])
-    model_GBP = grad_cam.GuidedBackPropagation(model=model) # TODO: Bugged
+    model_base = type(model).__bases__[0]
+    model_GCAM = grad_cam.create_grad_cam(model_base)(model=model)
+    #model_GCAM = grad_cam.create_grad_cam(object)(model=model, candidate_layers=[layer])
+    model_GBP = grad_cam.create_guided_back_propagation(model_base)(model=model) # TODO: Bugged
 
     batch_size = 1
     data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
