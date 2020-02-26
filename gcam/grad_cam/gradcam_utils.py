@@ -8,18 +8,22 @@ def save_guided_gcam(filename, gcam, guided_bp):
     guided_gcam = generate_guided_gcam(gcam, guided_bp)
     cv2.imwrite(filename, np.uint8(guided_gcam))
 
-def save_gcam(filename, gcam, raw_image):
-    gcam = generate_gcam(gcam, raw_image)
+def save_gcam(filename, gcam, raw_image=None):
+    gcam = generate_gcam(gcam, raw_image=raw_image)
     cv2.imwrite(filename, gcam)
 
-def generate_gcam(gcam, raw_image):
-    raw_image = _load_image(raw_image)
-    raw_image = _pil2opencv(raw_image)
-    raw_image = _tensor2numpy(raw_image)
-    gcam = _tensor2numpy(gcam)
-    raw_image = _resize_image(raw_image, gcam)
-    cmap = cm.jet_r(gcam)[..., :3] * 255.0  # TODO: Still bugged with batch dim
-    gcam = (cmap.astype(np.float) + raw_image.astype(np.float)) / 2  # TODO: Still bugged with batch dim
+def generate_gcam(gcam, raw_image=None):
+    if raw_image is not None:
+        raw_image = _load_image(raw_image)
+        raw_image = _pil2opencv(raw_image)
+        raw_image = _tensor2numpy(raw_image)
+        raw_image = _resize_image(raw_image, gcam)
+        gcam = _tensor2numpy(gcam)
+        cmap = cm.jet_r(gcam)[..., :3] * 255.0  # TODO: Still bugged with batch dim
+        gcam = (cmap.astype(np.float) + raw_image.astype(np.float)) / 2  # TODO: Still bugged with batch dim
+    else:
+        gcam = _tensor2numpy(gcam)
+        gcam = cm.jet_r(gcam)[..., :3] * 255.0  # TODO: Still bugged with batch dim
     return np.uint8(gcam)
 
 def generate_guided_gcam(gcam, guided_bp):

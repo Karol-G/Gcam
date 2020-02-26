@@ -14,7 +14,7 @@ from torch.nn import functional as F
 from tqdm import tqdm
 
 
-class _BaseWrapper(object):
+class _BaseWrapper():
     """
     Please modify forward() and backward() according to your task.
     """
@@ -198,16 +198,7 @@ class GradCAM(_BaseWrapper):
                     np.shape(fmaps) # Throws error without this line, I have no idea why...
                     fmaps = fmaps[i]
                     grads = self._find(self.grad_pool, layer)[i]
-                    # print("counter: {}".format(counter))
-                    # print("fmaps shape: {}".format(np.shape(fmaps)))
-                    # print("grads shape: {}".format(np.shape(grads)))
                     nonzeros = np.count_nonzero(grads.detach().cpu().numpy())
-                    # if True: #counter < 100:
-                    #     print("counter: {}".format(counter))
-                    #     #print("fmaps: {}".format(fmaps))
-                    #     print("nonzeros: {}".format(nonzeros))
-                    #     print("fmaps shape: {}".format(np.shape(fmaps)))
-                    #     print("grads shape: {}".format(np.shape(grads)))
                     self._compute_grad_weights(grads)
                     if nonzeros == 0 or not isinstance(fmaps, torch.Tensor) or not isinstance(grads, torch.Tensor):
                         counter += 1
@@ -229,10 +220,12 @@ class GradCAM(_BaseWrapper):
         gcam = torch.mul(fmaps, weights).sum(dim=1, keepdim=True)
         gcam = F.relu(gcam)
 
-        gcam = F.interpolate(
-            gcam, self.image_shape, mode="bilinear", align_corners=False
-        )
-
+        #print("gcam.shape: ", gcam)
+        #print("self.image_shape: ", self.image_shape)
+        # gcam = F.interpolate(
+        #     gcam, self.image_shape, mode="bilinear", align_corners=False
+        # )
+        #print("gcam.shape: ", gcam)
         B, C, H, W = gcam.shape
         gcam = gcam.view(B, -1)
         gcam -= gcam.min(dim=1, keepdim=True)[0]
@@ -241,7 +234,7 @@ class GradCAM(_BaseWrapper):
 
         return gcam
 
-    def generate(self, target_layer, dim=2):
+    def generate(self, target_layer):
         if target_layer == "auto":
             fmaps, weights = self.select_highest_layer()
             gcam = []

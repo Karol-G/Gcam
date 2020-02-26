@@ -5,8 +5,8 @@ def forward_disabled(model, dataset, iterations=10):
     return run_model.run(model, dataset, iterations=iterations)
 
 
-def forward_gcam(model, batch, layer='auto'):
-    return run_grad_cam.run(model, batch, layer=layer)
+def forward_gcam(model, batch, layer='auto', input_key="img"):
+    return run_grad_cam.run(model, batch, layer=layer, input_key=input_key)
 
 
 def evaluate_gcam(model, dataset, result_dir, layer='auto'):

@@ -13,13 +13,25 @@ from pathlib import Path
 OVERLAP_SCORE_THRESHOLD = 0.5
 ATTENTION_THRESHOLD = 80
 DILATE = 0
-SAVE_ALL_RESULTS = True
-SAVE_BAD_RESULTS = True
 
-def evaluate_dataset(model, dataset, result_dir, layer='auto'):
-    Path(result_dir).mkdir(parents=True, exist_ok=True)
-    result_dir = result_dir + "/" + layer
-    Path(result_dir).mkdir(parents=True, exist_ok=True)
+
+def evaluate_dataset(model, dataset, output_dir=None, layer='auto', input_key="img", mask_key="gt", evaluate=True, overlay=False):
+    """
+
+    :param model: A torch.nn.Module class
+    :param dataset: A torch.utils.data.Dataset class
+    :param output_dir: Save dir for the attention maps, if set to None then attention maps won't be saved
+    :param layer: The layers to extract the attention maps from (auto: chooses last conv layer, 'layer name': extracts attentions from layer with this name)
+    :param input_key: The dict key of a dataset batch that corresponds to the input
+    :param mask_key: The dict key of a dataset batch that corresponds to the mask / ground truth / segmentation
+    :param evaluate: If the dataset should be evaluated
+    :param overlay: If the attention maps should be overlaid on top of the input
+    :return:
+    """
+    if output_dir is not None:
+        Path(output_dir).mkdir(parents=True, exist_ok=True)
+        output_dir = output_dir + "/" + layer
+        Path(output_dir).mkdir(parents=True, exist_ok=True)
     dataset_len = dataset.__len__()
     model.eval()
     model_GCAM = grad_cam.GradCAM(model=model)
@@ -34,18 +46,18 @@ def evaluate_dataset(model, dataset, result_dir, layer='auto'):
     with torch.enable_grad():
         for i, batch in enumerate(data_loader):
             print_progress(start, i, dataset_len, batch_size)
-            image = batch["img"]
+            image = batch[input_key]
             _ = model_GCAM.forward(image)
             _ = model_GBP.forward(image)
             is_ok = model_GCAM.model.get_ok_list()
             # print("is_ok: {}".format(is_ok))
-            #cv2.imwrite("gt.png", batch["gt"].squeeze().numpy())
+            #cv2.imwrite("gt.png", batch[mask_key].squeeze().numpy())
 
             if True in is_ok: # Only if object are detected
                 model_GBP.backward()
                 attention_map_GBP = model_GBP.generate()
                 model_GCAM.backward()
-                attention_map_GCAM = model_GCAM.generate(target_layer=layer, dim=2)
+                attention_map_GCAM = model_GCAM.generate(target_layer=layer)
 
             # TODO: Evaluation machen
             # TODO: Guided-Backpropagation (Fehlerhaft)
@@ -58,28 +70,32 @@ def evaluate_dataset(model, dataset, result_dir, layer='auto'):
                     check_nans(attention_map_GCAM[j], i, j)
                     map_GCAM_j = attention_map_GCAM[j].squeeze().cpu().numpy()
                     map_GBP_j = attention_map_GBP[j].squeeze().cpu().numpy()
-                    img = image[j].squeeze().detach().cpu().numpy().transpose(1, 2, 0)
-                    gt = batch["gt"][j].squeeze().cpu().numpy()
-                    overlap_score = evaluate_image(map_GCAM_j, gt)
-                    overlap_percentage.append(overlap_score)
-                    if SAVE_ALL_RESULTS or (SAVE_BAD_RESULTS and overlap_score < OVERLAP_SCORE_THRESHOLD):
-                        # save_attention_map(filename="/visinf/projects_students/shared_vqa/pythia/attention_maps/gradcam/" + str(annId) + ".npy", attention_map=map_GCAM_j)
-                        save_gcam(filename=result_dir + "/attention_map_" + str(i * batch_size + j) + "_score_" + str(round(overlap_score * 100)) + ".png", gcam=map_GCAM_j, raw_image=img)
-                        # save_guided_gcam(filename="results/guided-gcam/attention_map_" + str(i * batch_size + j) + ".png", gcam=map_GCAM_j, guided_bp=map_GBP_j)
-                        print("Attention map saved.")
+                    if overlay:
+                        img = image[j].squeeze().detach().cpu().numpy().transpose(1, 2, 0)
+                    else:
+                        img = None
+                    if evaluate:
+                        mask = batch[mask_key][j].squeeze().cpu().numpy()
+                        overlap_score = evaluate_image(map_GCAM_j, mask)
+                        overlap_percentage.append(overlap_score)
+                        if output_dir is not None:
+                            # save_attention_map(filename="/visinf/projects_students/shared_vqa/pythia/attention_maps/gradcam/" + str(annId) + ".npy", attention_map=map_GCAM_j)
+                            save_gcam(filename=output_dir + "/attention_map_" + str(i * batch_size + j) + "_score_" + str(round(overlap_score * 100)) + ".png", gcam=map_GCAM_j, raw_image=img)
+                            # save_guided_gcam(filename="results/guided-gcam/attention_map_" + str(i * batch_size + j) + ".png", gcam=map_GCAM_j, guided_bp=map_GBP_j)
+                            print("Attention map saved.")
                 else:
                     print("Warning: No class detected in the {}-th image of batch {}!".format(j, i))
                     #save_image(batch["filepath"][j], i * batch_size + j, result_dir)
-                    overlap_percentage.append(0.0)
+                    if evaluate:
+                        overlap_percentage.append(0.0)
 
-            avg_overlap_percentage = sum(overlap_percentage) / len(overlap_percentage)
-            print("avg_overlap_percentage: {}%".format(round(avg_overlap_percentage*100, 2)))
+            if evaluate:
+                avg_overlap_percentage = sum(overlap_percentage) / len(overlap_percentage)
+                print("avg_overlap_percentage: {}%".format(round(avg_overlap_percentage*100, 2)))
 
-            if i == 10:
-                break
-
-    np.savetxt(result_dir + "/overlap_percentage.txt", overlap_percentage)
-    np.save(result_dir + "/overlap_percentage", overlap_percentage)
+    if evaluate and (output_dir is not None):
+        np.savetxt(output_dir + "/overlap_percentage.txt", overlap_percentage)
+        np.save(output_dir + "/overlap_percentage", overlap_percentage)
     gc.collect()
     torch.cuda.empty_cache()
 
@@ -112,7 +128,7 @@ def save_image(filepath, index, result_dir):
 def evaluate_image(attention_map, ground_truth): # This evaluation is not suposed to be IoU
     #attention_map = attention_map.squeeze().cpu().numpy()
     #ground_truth = ground_truth.squeeze().cpu().numpy()
-    ground_truth = _dilate_gt(ground_truth)
+    ground_truth = _dilate_mask(ground_truth)
     ground_truth = _resize_image(ground_truth, attention_map)
     ground_truth = np.array(ground_truth, dtype=np.uint8)
     attention_map -= np.min(attention_map) # attention_map.min()
@@ -128,17 +144,17 @@ def evaluate_image(attention_map, ground_truth): # This evaluation is not supose
 
     return overlap_percentage
 
-def _dilate_gt(gt):
+def _dilate_mask(mask):
     if DILATE > 0:
         kernel = np.ones((DILATE, DILATE), np.uint8)
-        return cv2.dilate(gt, kernel, iterations=1)
-    return gt
+        return cv2.dilate(mask, kernel, iterations=1)
+    return mask
 
-def _resize_image(gt, gcam):
-    if not (np.shape(gt) == np.shape(gcam)):
-        return cv2.resize(gt, np.shape(gcam))
+def _resize_image(mask, gcam):
+    if not (np.shape(mask) == np.shape(gcam)):
+        return cv2.resize(mask, np.shape(gcam))
     else:
-        return gt
+        return mask
 
 def print_layer_names(model, full=False, print_names=False):
     if not full:

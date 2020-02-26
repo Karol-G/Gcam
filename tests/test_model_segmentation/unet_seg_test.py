@@ -23,7 +23,7 @@ class TestSegmentation(unittest.TestCase):
         dataset = Dataset(device=DEVICE)
         model = Model(device=DEVICE)
         batch = dataset.__getitem__(0)
-        heatmap_gcam, heatmap_guided_gcam = gcam.forward_gcam(model, batch, layer='model.outc.conv')
+        _, heatmap_gcam, heatmap_guided_gcam = gcam.forward_gcam(model, batch, layer='model.outc.conv')
         assert heatmap_gcam.shape == (1, 384, 575, 3)
         assert heatmap_guided_gcam.shape == (1, 384, 575)
 
@@ -39,8 +39,8 @@ class TestSegmentation(unittest.TestCase):
         assert path.exists("results/unet_seg/model.outc.conv/attention_map_2_score_100.0.png")
         assert path.exists("results/unet_seg/model.outc.conv/overlap_percentage.npy")
         assert path.exists("results/unet_seg/model.outc.conv/overlap_percentage.txt")
-        if os.path.isdir("results"):
-            shutil.rmtree("results")
+        # if os.path.isdir("results"):
+        #     shutil.rmtree("results")
 
 if __name__ == '__main__':
     unittest.main()
