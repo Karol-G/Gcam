@@ -312,7 +312,7 @@ def run_evaluation(args):
     evaluator.set_reference(ref)
     if evaluator.labels is None:
         evaluator.construct_labels()
-    current_scores = evaluator.evaluate(**metric_kwargs)
+    current_scores = evaluator.extract(**metric_kwargs)
     if type(test) == str:
         current_scores["test"] = test
     if type(ref) == str:

@@ -7,6 +7,8 @@ import numpy as np
 from gcam.grad_cam import grad_cam
 from gcam.grad_cam.gradcam_utils import *
 from pathlib import Path
+from collections import defaultdict
+import pickle
 
 # FOBIDDEN: To call torch.no_grad, detach, .long(), .float() ... during forward
 
@@ -15,7 +17,7 @@ ATTENTION_THRESHOLD = 80
 DILATE = 0
 
 
-def evaluate_dataset(model, dataset, output_dir=None, layer='auto', input_key="img", mask_key="gt", evaluate=True, overlay=False):
+def extract(model, dataset, output_dir=None, layer='auto', input_key="img", mask_key="gt", evaluate=True, overlay=False):
     """
 
     :param model: A torch.nn.Module class
@@ -30,19 +32,18 @@ def evaluate_dataset(model, dataset, output_dir=None, layer='auto', input_key="i
     """
     if output_dir is not None:
         Path(output_dir).mkdir(parents=True, exist_ok=True)
-        output_dir = output_dir + "/" + layer
-        Path(output_dir).mkdir(parents=True, exist_ok=True)
+        # output_dir = output_dir + "/" + layer
+        # Path(output_dir).mkdir(parents=True, exist_ok=True)
     dataset_len = dataset.__len__()
     model.eval()
     model_base = type(model).__bases__[0]
-    model_GCAM = grad_cam.create_grad_cam(model_base)(model=model)
-    #model_GCAM = grad_cam.create_grad_cam(object)(model=model, candidate_layers=[layer])
+    model_GCAM = grad_cam.create_grad_cam(model_base)(model=model, target_layers=layer)
     model_GBP = grad_cam.create_guided_back_propagation(model_base)(model=model) # TODO: Bugged
 
     batch_size = 1
     data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
     start = time.time()
-    overlap_percentage = []
+    scores = defaultdict(list)
 
     with torch.enable_grad():
         for i, batch in enumerate(data_loader):
@@ -58,45 +59,53 @@ def evaluate_dataset(model, dataset, output_dir=None, layer='auto', input_key="i
                 model_GBP.backward()
                 attention_map_GBP = model_GBP.generate()
                 model_GCAM.backward()
-                attention_map_GCAM = model_GCAM.generate(target_layer=layer)
+                attention_map_GCAM = model_GCAM.generate()
 
             # TODO: Evaluation machen
             # TODO: Guided-Backpropagation (Fehlerhaft)
             # TODO: Save images with low overlap score
+            # TODO: Evaluations scores wird geraden über alle layers berechnet -> Muss für jede einzeln berechnet werden
 
             #print("attention_map_GCAM: {}".format(attention_map_GCAM))
 
-            for j in range(batch_size):
-                if is_ok[j]:
-                    check_nans(attention_map_GCAM[j], i, j)
-                    map_GCAM_j = attention_map_GCAM[j].squeeze().cpu().numpy()
-                    map_GBP_j = attention_map_GBP[j].squeeze().cpu().numpy()
-                    if overlay:
-                        img = image[j].squeeze().detach().cpu().numpy().transpose(1, 2, 0)
+            for layer_name in attention_map_GCAM.keys():
+                print("layer_name: ", layer_name)
+                for j in range(batch_size):
+                    if is_ok[j]:
+                        layer_output_dir = output_dir + "/" + layer_name
+                        Path(layer_output_dir).mkdir(parents=True, exist_ok=True)
+                        map_GCAM = attention_map_GCAM[layer_name][j]
+                        #check_nans(attention_map_GCAM[j], i, j)
+                        if overlay:
+                            img = image[j].squeeze().detach().cpu().numpy().transpose(1, 2, 0)
+                        else:
+                            img = None
+                        if evaluate:
+                            mask = batch[mask_key][j].squeeze().cpu().numpy()
+                            score = evaluate_image(map_GCAM, mask)
+                            scores[layer_name].append(score)
+                            if output_dir is not None:
+                                # save_attention_map(filename="/visinf/projects_students/shared_vqa/pythia/attention_maps/gradcam/" + str(annId) + ".npy", attention_map=map_GCAM_j)
+                                save_gcam(filename=layer_output_dir + "/attention_map_" + str(i * batch_size + j) + "_score_" + str(round(score * 100)) + ".png", gcam=map_GCAM, image=img)
+                                # save_guided_gcam(filename="results/guided-gcam/attention_map_" + str(i * batch_size + j) + ".png", gcam=map_GCAM_j, guided_bp=map_GBP_j)
+                                print("Attention map saved.")
                     else:
-                        img = None
-                    if evaluate:
-                        mask = batch[mask_key][j].squeeze().cpu().numpy()
-                        overlap_score = evaluate_image(map_GCAM_j, mask)
-                        overlap_percentage.append(overlap_score)
-                        if output_dir is not None:
-                            # save_attention_map(filename="/visinf/projects_students/shared_vqa/pythia/attention_maps/gradcam/" + str(annId) + ".npy", attention_map=map_GCAM_j)
-                            save_gcam(filename=output_dir + "/attention_map_" + str(i * batch_size + j) + "_score_" + str(round(overlap_score * 100)) + ".png", gcam=map_GCAM_j, raw_image=img)
-                            # save_guided_gcam(filename="results/guided-gcam/attention_map_" + str(i * batch_size + j) + ".png", gcam=map_GCAM_j, guided_bp=map_GBP_j)
-                            print("Attention map saved.")
-                else:
-                    print("Warning: No class detected in the {}-th image of batch {}!".format(j, i))
-                    #save_image(batch["filepath"][j], i * batch_size + j, result_dir)
-                    if evaluate:
-                        overlap_percentage.append(0.0)
+                        print("Warning: No class detected in the {}-th image of batch {}!".format(j, i))
+                        #save_image(batch["filepath"][j], i * batch_size + j, result_dir)
+                        if evaluate:
+                            scores[layer_name].append(0)
 
-            if evaluate:
-                avg_overlap_percentage = sum(overlap_percentage) / len(overlap_percentage)
-                print("avg_overlap_percentage: {}%".format(round(avg_overlap_percentage*100, 2)))
-
-    if evaluate and (output_dir is not None):
-        np.savetxt(output_dir + "/overlap_percentage.txt", overlap_percentage)
-        np.save(output_dir + "/overlap_percentage", overlap_percentage)
+    if evaluate:
+        avg_scores = {}
+        for layer_name in scores.keys():
+            avg_scores[layer_name] = sum(scores[layer_name]) / len(scores[layer_name])
+            print("average score {}: {}%".format(layer_name, round(avg_scores[layer_name]*100, 2)))
+        if output_dir is not None:
+            #np.savetxt(output_dir + "/scores.txt", scores)
+            #np.save(output_dir + "/scores", scores)
+            with open(output_dir + '/scores.pickle', 'wb') as handle:
+                pickle.dump([avg_scores, scores], handle, protocol=pickle.HIGHEST_PROTOCOL)
+            # TODO: Save as pickle
     gc.collect()
     torch.cuda.empty_cache()
 
@@ -141,7 +150,7 @@ def evaluate_image(attention_map, ground_truth): # This evaluation is not supose
     overlap_percentage = cv2.bitwise_and(attention_map, attention_map, mask=ground_truth)
     attention_map = np.sum(attention_map)
     overlap_percentage = np.sum(overlap_percentage) / attention_map
-    print("overlap_percentage: {}%".format(round(overlap_percentage*100, 2)))
+    #print("overlap_percentage: {}%".format(round(overlap_percentage*100, 2)))
 
     return overlap_percentage
 
@@ -161,7 +170,8 @@ def print_layer_names(model, full=False, print_names=False):
     if not full:
         module_names = list(model.named_modules())[0]
     else:
-        module_names = list(model.named_modules())
+        #module_names = list(model.named_modules())
+        module_names = np.asarray(list(model.named_modules()))[:, 0]
     if print_names:
         print(module_names)
     with open("../module_names.txt", "w") as output:
@@ -172,8 +182,8 @@ if __name__ == "__main__":
     # from models.yolo_model import YoloModel as Model
     # from data.tumor_seg_dataset import TumorDataset as Dataset
     # from models.tumor_seg_model import TumorSegModel as Model
-    from models.unet_seg_dataset import UnetSegDataset as Dataset
-    from models.unet_seg_model import UnetSegModel as Model
+    from models.unet_seg_example.unet_seg_dataset import UnetSegDataset as Dataset
+    from models.unet_seg_example.unet_seg_model import UnetSegModel as Model
 
     DEVICE = "cuda" # torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     dataset = Dataset(device=DEVICE)
@@ -183,14 +193,14 @@ if __name__ == "__main__":
 
     #evaluate_dataset(model, dataset, layer='model.outc.conv')
     #layers = ['model.up4', 'model.up3', 'model.up2', 'model.up1', 'model.down4', 'model.down3', 'model.down2', 'model.down1']
-    layers = ['model.up4.conv.double_conv.1',
-              'model.up3.conv.double_conv.1',
-              'model.up2.conv.double_conv.1',
-              'model.up1.conv.double_conv.1',
-              'model.down4.maxpool_conv.1.double_conv.1',
-              'model.down3.maxpool_conv.1.double_conv.1',
-              'model.down2.maxpool_conv.1.double_conv.1',
-              'model.down1.maxpool_conv.1.double_conv.1']
-
-    for layer in layers:
-        evaluate_dataset(model, dataset, "../results", layer=layer)
+    # layers = ['model.up4.conv.double_conv.1',
+    #           'model.up3.conv.double_conv.1',
+    #           'model.up2.conv.double_conv.1',
+    #           'model.up1.conv.double_conv.1',
+    #           'model.down4.maxpool_conv.1.double_conv.1',
+    #           'model.down3.maxpool_conv.1.double_conv.1',
+    #           'model.down2.maxpool_conv.1.double_conv.1',
+    #           'model.down1.maxpool_conv.1.double_conv.1']
+    #
+    # for layer in layers:
+    #     evaluate_dataset(model, dataset, "../results", layer=layer)

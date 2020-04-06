@@ -1,7 +1,6 @@
 import torch
 import gc
 from torch.utils.data import DataLoader
-from torchviz import make_dot, make_dot_from_trace
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -14,8 +13,6 @@ def run(model, dataset, iterations=10):
         output = model(batch["img"])
         outputs.append(output)
         #print("output: {}".format(output))
-        # graph = make_dot(output, params=dict(model.named_parameters()))
-        # print(graph)
         if i >= iterations:
             break
 

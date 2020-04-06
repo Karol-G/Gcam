@@ -216,7 +216,7 @@ def demo1(image_paths, target_layer, arch, topk, output_dir, cuda):
 
         # Grad-CAM
         gcam.backward(ids=ids[:, [i]])
-        regions = gcam.generate(target_layer=target_layer)
+        regions = gcam.generate(target_layers=target_layer)
 
         for j in range(len(images)):
             print("\t#{}: {} ({:.5f})".format(j, classes[ids[j, i]], probs[j, i]))
@@ -297,7 +297,7 @@ def demo2(image_paths, output_dir, cuda):
         print("Generating Grad-CAM @{}".format(target_layer))
 
         # Grad-CAM
-        regions = gcam.generate(target_layer=target_layer)
+        regions = gcam.generate(target_layers=target_layer)
 
         for j in range(len(images)):
             print(
@@ -378,7 +378,7 @@ def demo3(image_paths, topk, output_dir, cuda):
 
         # Grad-CAM
         gcam.backward(ids=ids[:, [i]])
-        regions = gcam.generate(target_layer=target_layer)
+        regions = gcam.generate(target_layers=target_layer)
 
         for j in range(len(images)):
             print("\t#{}: {} ({:.5f})".format(j, classes[ids[j, i]], probs[j, i]))

@@ -4,6 +4,7 @@ from gcam.grad_cam.gradcam_utils import *
 import inspect
 
 
+# TODO: DEPRECATED
 def run(model, batch, layer='auto', input_key="img"):
     model.eval()
     model_base = type(model).__bases__[0]
@@ -21,7 +22,7 @@ def run(model, batch, layer='auto', input_key="img"):
             model_GBP.backward()
             attention_map_GBP = model_GBP.generate()[0]
             model_GCAM.backward()
-            attention_map_GCAM = model_GCAM.generate(target_layer=layer)[0]
+            attention_map_GCAM = model_GCAM.generate(target_layers=layer)[0]
 
         image_GCAM = []
         image_GGCAM = []
@@ -31,7 +32,7 @@ def run(model, batch, layer='auto', input_key="img"):
                 map_GCAM_j = attention_map_GCAM[j].squeeze().cpu().numpy()
                 map_GBP_j = attention_map_GBP[j].squeeze().cpu().numpy()
                 img = batch[input_key][j].squeeze().detach().cpu().numpy().transpose(1, 2, 0)
-                image_GCAM.append(generate_gcam(gcam=map_GCAM_j, raw_image=img))
+                image_GCAM.append(generate_gcam(gcam=map_GCAM_j, image=img))
                 image_GGCAM.append(generate_guided_gcam(gcam=map_GCAM_j, guided_bp=map_GBP_j))
             else:
                 image_GCAM.append(batch[input_key][j])

@@ -244,7 +244,7 @@ def main(image_paths, target_layer, arch, topk, output_dir, cuda):
 
         # Grad-CAM
         gcam.backward(ids=ids[:, [i]])
-        regions = gcam.generate(target_layer=target_layer)
+        regions = gcam.generate(target_layers=target_layer)
 
         for j in range(len(images)):
             print("\t#{}: {} ({:.5f})".format(j, classes[ids[j, i]], probs[j, i]))
