@@ -57,40 +57,34 @@ class TestSegmentation(unittest.TestCase):
     #     # if os.path.isdir("results"):
     #     #     shutil.rmtree("results")
 
-    # def test_gcam_hook(self):
-    #     layer = 'full'
-    #     model = gcam.inject(self.model, is_backward_ready=True, output_dir="results/unet_seg/test_gcam_hook", layer=layer, input_key=None, mask_key=None, postprocessor="sigmoid")
-    #     model.eval()
-    #     data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
-    #     # TODO: Memory leak finden (Oder nur beim testen?)
-    #     #outputs = []
-    #     for i, batch in enumerate(data_loader):
-    #         output = model(batch["img"])
-    #         #outputs.append(output)
-    #
-    #     # assert path.exists("results/unet_seg/test_gcam_hook/" + layer + "/attention_map_0.png")
-    #     # assert path.exists("results/unet_seg/test_gcam_hook/" + layer + "/attention_map_1.png")
-    #     # assert path.exists("results/unet_seg/test_gcam_hook/" + layer + "/attention_map_2.png")
-    #
-    #     # if os.path.isdir("results"):
-    #     #     shutil.rmtree("results")
+    def test_gcam_hook(self):
+        layer = 'full'
+        model = gcam.inject(self.model, is_backward_ready=True, output_dir="results/unet_seg/test_gcam_hook", layer=layer, input_key=None, mask_key=None, postprocessor="sigmoid")
+        model.eval()
+        data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
+        # TODO: Memory leak finden (Oder nur beim testen?)
+        #outputs = []
+        for i, batch in enumerate(data_loader):
+            output = model(batch["img"])
+            #outputs.append(output)
+
+        # assert path.exists("results/unet_seg/test_gcam_hook/" + layer + "/attention_map_0.png")
+        # assert path.exists("results/unet_seg/test_gcam_hook/" + layer + "/attention_map_1.png")
+        # assert path.exists("results/unet_seg/test_gcam_hook/" + layer + "/attention_map_2.png")
+
+        # if os.path.isdir("results"):
+        #     shutil.rmtree("results")
 
     def test_gcam_hook_attribute_copy(self):
         layer = 'full'
         gcam_model = gcam.inject(self.model, is_backward_ready=True, output_dir="results/unet_seg/test_gcam_hook", layer=layer, input_key=None, mask_key=None, postprocessor="sigmoid")
-        #gcam_model.eval()
+
         self.model.set_value(1)
-        #gcam_model.set_value(2)
-        gcam_model_value = gcam_model.get_value()
-        model_value = self.model.get_value()
-        print("gcam_model_value: ", gcam_model_value)
-        print("model_value: ", model_value)
-        self.model.set_value(1)
+        assert(self.model.get_value() == 1)
+        assert (gcam_model.get_value() == -1)
         gcam_model.set_value(2)
-        gcam_model_value = gcam_model.get_value()
-        model_value = self.model.get_value()
-        print("gcam_model_value: ", gcam_model_value)
-        print("model_value: ", model_value)
+        assert (self.model.get_value() == 1)
+        assert (gcam_model.get_value() == 2)
 
 if __name__ == '__main__':
     unittest.main()

@@ -2,6 +2,8 @@ from gcam.grad_cam import grad_cam
 from gcam.grad_cam.gradcam_utils import *
 from pathlib import Path
 from torch.nn import functional as F
+import types
+import functools
 
 # TODO: Set requirements in setup.py
 
@@ -13,6 +15,7 @@ def create_gcam_hook(base):
     class GcamHook(base):
         def __init__(self, model, is_backward_ready, output_dir, layer, input_key, mask_key, postprocessor):
             super(GcamHook, self).__init__()
+            self.__dict__ = model.__dict__.copy()
             #torch.backends.cudnn.enabled = False # TODO: out of memory
             if output_dir is not None:
                 Path(output_dir).mkdir(parents=True, exist_ok=True)
@@ -71,15 +74,34 @@ def create_gcam_hook(base):
         # TODO: Retain graph only with normal backward afterwards, otherwise out of memory
         # TODO: Save list if memory size is 1GB
         # TODO: https://stackoverflow.com/questions/20771470/list-memory-usage
+        # def __getattr__(self, method):
+        #     def abstract_method(*args):
+        #         print("-------------------------- ABSTRACT METHOD GCAM HOOK (" + method + ") --------------------------")
+        #         if args==():
+        #             return getattr(self.model, method)()
+        #         else:
+        #             return getattr(self.model, method)(args)
+        #
+        #     return abstract_method
+
         def __getattr__(self, method):
             def abstract_method(*args):
                 print("-------------------------- ABSTRACT METHOD GCAM HOOK (" + method + ") --------------------------")
-                if args==():
-                    return getattr(self.model, method)()
+                if args == ():
+                    return self.copy_func(getattr(self.model, method))(self)
                 else:
-                    return getattr(self.model, method)(args)
+                    return self.copy_func(getattr(self.model, method))(self, *args)
 
             return abstract_method
+
+        def copy_func(self, f):
+            print("-------------------------- COPY FUNC GCAM HOOK --------------------------")
+            g = types.FunctionType(f.__code__, f.__globals__, name=f.__name__,
+                                   argdefs=f.__defaults__,
+                                   closure=f.__closure__)
+            g = functools.update_wrapper(g, f)
+            g.__kwdefaults__ = f.__kwdefaults__
+            return g
 
         def post_processing(self, postprocessor, output):
             if postprocessor is None:
