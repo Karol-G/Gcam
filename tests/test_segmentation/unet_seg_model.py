@@ -1,6 +1,6 @@
 import torch
 import os
-from tests.test_model_segmentation.model.unet.unet_model import UNet
+from tests.test_segmentation.model.unet.unet_model import UNet
 
 current_path = os.path.dirname(os.path.abspath(__file__))
 CECKPOINT_PATH = os.path.join(current_path, 'model/CHECKPOINT.pth')

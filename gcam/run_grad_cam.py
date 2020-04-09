@@ -32,8 +32,8 @@ def run(model, batch, layer='auto', input_key="img"):
                 map_GCAM_j = attention_map_GCAM[j].squeeze().cpu().numpy()
                 map_GBP_j = attention_map_GBP[j].squeeze().cpu().numpy()
                 img = batch[input_key][j].squeeze().detach().cpu().numpy().transpose(1, 2, 0)
-                image_GCAM.append(generate_gcam(gcam=map_GCAM_j, image=img))
-                image_GGCAM.append(generate_guided_gcam(gcam=map_GCAM_j, guided_bp=map_GBP_j))
+                image_GCAM.append(generate_gcam(attention_map=map_GCAM_j, data=img))
+                image_GGCAM.append(generate_guided_bp(gcam=map_GCAM_j, guided_bp=map_GBP_j))
             else:
                 image_GCAM.append(batch[input_key][j])
                 image_GGCAM.append(batch[input_key][j])

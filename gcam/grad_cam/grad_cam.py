@@ -168,47 +168,22 @@ def create_grad_cam(base):
             self.registered_hooks = {}
 
             def forward_hook(key):
-                # print("FORWARD HOOK0 " + str(key))
                 def forward_hook_(module, input, output):
-                    # print("FORWARD HOOK11 " + str(key))
                     self.registered_hooks[key][0] = True
-
-                    def backward_hook_(grad_out):
-                        # print("BACKWARD HOOK1 " + str(key))
-                        self.registered_hooks[key][1] = True
-                        # Save the gradients correspond to the featuremaps
-                        self.grad_pool[key] = grad_out[0].detach()
-                        # print("grads second: ", grad_out[0])
-                        # print("grad_out: ", grad_out)
-                        # print("module grads: ", module)
-                        # nonzeros = np.count_nonzero(self.grad_pool[key].cpu().numpy())
-                        # print("Module name: {}, Non zeros grads: {}".format(self.module_names[module], nonzeros))
-
-                    if not self.registered_hooks[key][1]:
-                        if isinstance(output, torch.Tensor):
-                            self.handlers.append(output.register_hook(backward_hook_))
-                        else:
-                            print("Cannot hook layer {} because its gradients are not in tensor format".format(key))
                     # Save featuremaps
-                    #self.fmap_pool[key] = output.detach()
                     self.fmap_pool[key] = detach_output(output)
+                    if not isinstance(output, torch.Tensor):
+                        print("Cannot hook layer {} because its gradients are not in tensor format".format(key))
 
                 return forward_hook_
 
-            # def backward_hook(key):
-            #     # print("BACKWARD HOOK0 " + str(key))
-            #     def backward_hook_(module, grad_in, grad_out):
-            #         # print("BACKWARD HOOK1 " + str(key))
-            #         self.registered_hooks[key][1] = True
-            #         # Save the gradients correspond to the featuremaps
-            #         self.grad_pool[key] = grad_out[0].detach()
-            #         # print("grads first: ", grad_out[0])
-            #         #print("grad_out: ", grad_out)
-            #         #print("module grads: ", module)
-            #         # nonzeros = np.count_nonzero(self.grad_pool[key].cpu().numpy())
-            #         # print("Module name: {}, Non zeros grads: {}".format(self.module_names[module], nonzeros))
-            #
-            #     return backward_hook_
+            def backward_hook(key):
+                def backward_hook_(module, grad_in, grad_out):
+                    self.registered_hooks[key][1] = True
+                    # Save the gradients correspond to the featuremaps
+                    self.grad_pool[key] = grad_out[0].detach()
+
+                return backward_hook_
 
             # If any candidates are not specified, the hook is registered to all the layers.
             for name, module in self.model.named_modules():
@@ -217,7 +192,7 @@ def create_grad_cam(base):
                     self.registered_hooks[name] = [False, False]
                     self.module_names[module] = name
                     self.handlers.append(module.register_forward_hook(forward_hook(name)))
-                    #self.handlers.append(module.register_backward_hook(backward_hook(name)))
+                    self.handlers.append(module.register_backward_hook(backward_hook(name)))
 
         def _find(self, pool, target_layer):
             if target_layer in pool.keys():

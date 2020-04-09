@@ -1,7 +1,7 @@
 from torch.utils.data import Dataset
 import os
 import torch
-from tests.test_model_segmentation.model.utils.dataset import BasicDataset
+from tests.test_segmentation.model.utils.dataset import BasicDataset
 
 current_path = os.path.dirname(os.path.abspath(__file__))
 IMAGE_DIR = os.path.join(current_path, 'data/imgs/')

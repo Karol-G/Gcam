@@ -86,7 +86,7 @@ def extract(model, dataset, output_dir=None, layer='auto', input_key="img", mask
                             scores[layer_name].append(score)
                             if output_dir is not None:
                                 # save_attention_map(filename="/visinf/projects_students/shared_vqa/pythia/attention_maps/gradcam/" + str(annId) + ".npy", attention_map=map_GCAM_j)
-                                save_gcam(filename=layer_output_dir + "/attention_map_" + str(i * batch_size + j) + "_score_" + str(round(score * 100)) + ".png", gcam=map_GCAM, image=img)
+                                save_gcam(filename=layer_output_dir + "/attention_map_" + str(i * batch_size + j) + "_score_" + str(round(score * 100)) + ".png", gcam=map_GCAM, data=img)
                                 # save_guided_gcam(filename="results/guided-gcam/attention_map_" + str(i * batch_size + j) + ".png", gcam=map_GCAM_j, guided_bp=map_GBP_j)
                                 print("Attention map saved.")
                     else:
