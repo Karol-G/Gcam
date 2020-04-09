@@ -12,8 +12,8 @@ def create_grad_cam_pp(base):
         Look at Figure 2 on page 4
         """
 
-        def __init__(self, model, target_layers=None, is_backward_ready=None, postprocessor=None, retain_graph=False):
-            super(GradCamPP, self).__init__(model, target_layers=target_layers, is_backward_ready=is_backward_ready, postprocessor=postprocessor, retain_graph=retain_graph)
+        def __init__(self, model, target_layers=None, postprocessor=None, retain_graph=False):
+            super(GradCamPP, self).__init__(model, target_layers=target_layers, postprocessor=postprocessor, retain_graph=retain_graph)
 
         def _select_highest_layer(self):
             # TODO: Does not always select highest layer

@@ -16,7 +16,7 @@ def gcam_hook(model):
 
 def create_gcam_hook(base):
     class GcamHook(base):
-        def __init__(self, model, is_backward_ready, output_dir, backend, layer, input_key, mask_key, postprocessor, retain_graph, dim):
+        def __init__(self, model, output_dir, backend, layer, input_key, mask_key, postprocessor, retain_graph, dim):
             super(GcamHook, self).__init__()
             self.__dict__ = model.__dict__.copy()
             #torch.backends.cudnn.enabled = False # TODO: out of memory
@@ -30,28 +30,28 @@ def create_gcam_hook(base):
             self.mask_key = mask_key
             self.model = model
             self.model.eval()
-            self.model_backend, self.heatmap = self._assign_backend(backend, self.model, self.layer, is_backward_ready, postprocessor, retain_graph)
+            self.model_backend, self.heatmap = self._assign_backend(backend, self.model, self.layer, postprocessor, retain_graph)
             self.backend = backend
             self.counter = 0
             self.dim = dim
             #print("--------------------SUPER TEST")
 
-        def _assign_backend(self, backend, model, target_layers, is_backward_ready, postprocessor, retain_graph):
+        def _assign_backend(self, backend, model, target_layers, postprocessor, retain_graph):
             if backend == "gbp":
-                return create_guided_back_propagation(object)(model=model, is_backward_ready=is_backward_ready, postprocessor=postprocessor, retain_graph=retain_graph), False
+                return create_guided_back_propagation(object)(model=model, postprocessor=postprocessor, retain_graph=retain_graph), False
             elif backend == "gcam":
-                return create_grad_cam(object)(model=model, target_layers=target_layers, is_backward_ready=is_backward_ready, postprocessor=postprocessor, retain_graph=retain_graph), True
+                return create_grad_cam(object)(model=model, target_layers=target_layers, postprocessor=postprocessor, retain_graph=retain_graph), True
             elif backend == "ggcam":
-                return create_guided_grad_cam(object)(model=model, target_layers=target_layers, is_backward_ready=is_backward_ready, postprocessor=postprocessor, retain_graph=retain_graph), False
+                return create_guided_grad_cam(object)(model=model, target_layers=target_layers, postprocessor=postprocessor, retain_graph=retain_graph), False
             elif backend == "gcampp":
-                return create_grad_cam_pp(object)(model=model, target_layers=target_layers, is_backward_ready=is_backward_ready, postprocessor=postprocessor, retain_graph=retain_graph), True
+                return create_grad_cam_pp(object)(model=model, target_layers=target_layers, postprocessor=postprocessor, retain_graph=retain_graph), True
             else:
                 raise TypeError("Backend does not exist")
 
-        def __call__(self, batch):
-            return self.forward(batch)
+        def __call__(self, batch, label=None):
+            return self.forward(batch, label)
 
-        def forward(self, batch):
+        def forward(self, batch, label=None):
             #print("-------------------------- FORWARD GCAM HOOK --------------------------")
             with torch.enable_grad():
                 if self.input_key is None:
@@ -61,7 +61,7 @@ def create_gcam_hook(base):
                     data_shape = batch[self.input_key].shape[-self.dim:]
                     batch_size = batch[self.input_key].shape[0]
                 output = self.model_backend.forward(batch, data_shape)
-                self.model_backend.backward(output=output)
+                self.model_backend.backward(output=output, label=label)
                 attention_map = self.model_backend.generate()
 
                 for layer_name in attention_map.keys():
@@ -105,9 +105,5 @@ def create_gcam_hook(base):
             g = functools.update_wrapper(g, f)
             g.__kwdefaults__ = f.__kwdefaults__
             return g
-
-        def _select_ids(self, output):
-            # TODO: Implement
-            pass
 
     return GcamHook

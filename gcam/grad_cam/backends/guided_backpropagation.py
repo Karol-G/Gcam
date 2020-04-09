@@ -11,8 +11,8 @@ def create_guided_back_propagation(base):
         Look at Figure 1 on page 8.
         """
 
-        def __init__(self, model, is_backward_ready=None, postprocessor=None, retain_graph=False):
-            super(GuidedBackPropagation, self).__init__(model, is_backward_ready=is_backward_ready, postprocessor=postprocessor, retain_graph=retain_graph)
+        def __init__(self, model, postprocessor=None, retain_graph=False):
+            super(GuidedBackPropagation, self).__init__(model, postprocessor=postprocessor, retain_graph=retain_graph)
 
             def backward_hook(module, grad_in, grad_out):
                 # Cut off negative gradients

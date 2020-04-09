@@ -27,8 +27,8 @@ def create_grad_cam(base):
         Look at Figure 2 on page 4
         """
 
-        def __init__(self, model, target_layers=None, is_backward_ready=None, postprocessor=None, retain_graph=False):
-            super(GradCAM, self).__init__(model, is_backward_ready=is_backward_ready, postprocessor=postprocessor, retain_graph=retain_graph)
+        def __init__(self, model, target_layers=None, postprocessor=None, retain_graph=False):
+            super(GradCAM, self).__init__(model, postprocessor=postprocessor, retain_graph=retain_graph)
             self.fmap_pool = OrderedDict()
             self.grad_pool = OrderedDict()
             self.module_names = {}

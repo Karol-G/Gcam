@@ -7,9 +7,9 @@ from gcam.grad_cam.backends.guided_backpropagation import create_guided_back_pro
 
 def create_guided_grad_cam(base):
     class GuidedGradCam(base):
-        def __init__(self, model, target_layers=None, is_backward_ready=None, postprocessor=None, retain_graph=False):
-            self.model_GCAM = create_grad_cam(base)(model=model, target_layers=target_layers, is_backward_ready=is_backward_ready, postprocessor=postprocessor, retain_graph=retain_graph)
-            self.model_GBP = create_guided_back_propagation(base)(model=model, is_backward_ready=is_backward_ready, postprocessor=postprocessor, retain_graph=retain_graph)
+        def __init__(self, model, target_layers=None, postprocessor=None, retain_graph=False):
+            self.model_GCAM = create_grad_cam(base)(model=model, target_layers=target_layers, postprocessor=postprocessor, retain_graph=retain_graph)
+            self.model_GBP = create_guided_back_propagation(base)(model=model, postprocessor=postprocessor, retain_graph=retain_graph)
 
         def forward(self, data, data_shape):
             self.output_GCAM = self.model_GCAM.forward(data.clone(), data_shape)
