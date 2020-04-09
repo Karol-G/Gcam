@@ -16,9 +16,9 @@ def create_guided_grad_cam(base):
             self.output_GBP = self.model_GBP.forward(data.clone(), data_shape)
             return self.output_GCAM
 
-        def backward(self, ids=None, output=None):
-            self.model_GCAM.backward(ids=ids, output=self.output_GCAM)
-            self.model_GBP.backward(ids=ids, output=self.output_GBP)
+        def backward(self, output=None, label=None):
+            self.model_GCAM.backward(output=self.output_GCAM, label=label)
+            self.model_GBP.backward(output=self.output_GBP, label=label)
 
         def generate(self):
             attention_map_GCAM = self.model_GCAM.generate()

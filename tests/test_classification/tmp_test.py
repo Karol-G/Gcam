@@ -49,14 +49,14 @@ class Tmp():
         #     shutil.rmtree("results")
 
     def test_gcam_hook(self):
-        layer = 'full'
+        layer = 'layer4'
         model = gcam.inject(self.model, output_dir="results/resnet152/test_gcam_hook", backend="gcam", layer=layer, input_key=None, mask_key=None, postprocessor="softmax")
         model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
         # TODO: Memory leak finden (Oder nur beim testen?)
         #outputs = []
         for i, batch in enumerate(data_loader):
-            output = model(batch[0])
+            output = model(batch[0], label="best")
             #outputs.append(output)
 
         gc.collect()
@@ -70,14 +70,14 @@ class Tmp():
         #     shutil.rmtree("results")
 
     def test_ggcam_hook(self):
-        layer = 'full'
+        layer = 'layer4'
         model = gcam.inject(self.model, output_dir="results/resnet152/test_ggcam_hook", backend="ggcam", layer=layer, input_key=None, mask_key=None, postprocessor="softmax")
         model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
         # TODO: Memory leak finden (Oder nur beim testen?)
         #outputs = []
         for i, batch in enumerate(data_loader):
-            output = model(batch[0])
+            output = model(batch[0], label="max")
             #outputs.append(output)
 
         gc.collect()
@@ -91,14 +91,14 @@ class Tmp():
         #     shutil.rmtree("results")
 
     def test_gcampp_hook(self):
-        layer = 'full'
+        layer = 'layer4'
         model = gcam.inject(self.model, output_dir="results/resnet152/test_gcampp_hook", backend="gcampp", layer=layer, input_key=None, mask_key=None, postprocessor="softmax")
         model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
         # TODO: Memory leak finden (Oder nur beim testen?)
         #outputs = []
         for i, batch in enumerate(data_loader):
-            output = model(batch[0])
+            output = model(batch[0], label="max")
             #outputs.append(output)
 
         gc.collect()
@@ -111,21 +111,9 @@ class Tmp():
         # if os.path.isdir("results"):
         #     shutil.rmtree("results")
 
-    def test_gcam_hook_attribute_copy(self):
-        layer = 'full'
-        gcam_model = gcam.inject(self.model, output_dir="results/resnet152/test_gcam_hook", backend="gcam", layer=layer, input_key=None, mask_key=None, postprocessor="softmax")
-
-        self.model.set_value(1)
-        assert(self.model.get_value() == 1)
-        assert (gcam_model.get_value() == -1)
-        gcam_model.set_value(2)
-        assert (self.model.get_value() == 1)
-        assert (gcam_model.get_value() == 2)
-
 if __name__ == '__main__':
     test = Tmp()
-    #test.test_gbp_hook()
+    test.test_gbp_hook()
     test.test_gcam_hook()
-    #test.test_ggcam_hook()
-    #test.test_gcampp_hook()
-    #test.test_gcam_hook_attribute_copy()
+    test.test_ggcam_hook()
+    test.test_gcampp_hook()
