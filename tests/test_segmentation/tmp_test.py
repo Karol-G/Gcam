@@ -44,7 +44,7 @@ class Tmp():
 
     def test_gcam_hook(self):
         layer = 'full'
-        model = gcam.inject(self.model, output_dir="results/unet_seg/test_gcam_hook", backend="gcam", layer=layer, input_key=None, mask_key=None, postprocessor="sigmoid")
+        model = gcam.inject(self.model, output_dir="results/unet_seg/test_gcam_hook", backend="gcam", layer=layer, input_key=None, mask_key=None, postprocessor="sigmoid", save_maps=True)
         model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
         # TODO: Memory leak finden (Oder nur beim testen?)
