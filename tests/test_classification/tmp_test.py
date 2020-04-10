@@ -77,7 +77,7 @@ class Tmp():
         # TODO: Memory leak finden (Oder nur beim testen?)
         #outputs = []
         for i, batch in enumerate(data_loader):
-            output = model(batch[0], label="max")
+            output = model(batch[0], label="best")
             #outputs.append(output)
 
         gc.collect()
@@ -98,7 +98,7 @@ class Tmp():
         # TODO: Memory leak finden (Oder nur beim testen?)
         #outputs = []
         for i, batch in enumerate(data_loader):
-            output = model(batch[0], label="max")
+            output = model(batch[0], label="best")
             #outputs.append(output)
 
         gc.collect()

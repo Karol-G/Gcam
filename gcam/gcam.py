@@ -16,5 +16,7 @@ def extract(model, dataset, output_dir, layer='auto', input_key="img", mask_key=
     return gcam.evaluate_grad_cam.extract(model, dataset, output_dir, layer=layer)
 
 
-def inject(model, output_dir=None, backend="gcam", layer='auto', input_key="img", mask_key="gt", postprocessor=None, retain_graph=False, dim=2):
-    return gcam.gcam_hook.gcam_hook(model)(model, output_dir, backend, layer, input_key, mask_key, postprocessor, retain_graph, dim)
+def inject(model, output_dir=None, backend="gcam", layer='auto', input_key=None, mask_key=None, postprocessor=None,
+           retain_graph=False, dim=2, save_log=False, save_maps=False, save_pickle=False, evaluate=False, evaluation_metric="default", return_score=False):
+    return gcam.gcam_hook.gcam_hook(model)(model, output_dir, backend, layer, input_key, mask_key, postprocessor,
+                                           retain_graph, dim, save_log, save_maps, save_pickle, evaluate, evaluation_metric, return_score)

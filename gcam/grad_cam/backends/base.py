@@ -57,9 +57,11 @@ def create_base_wrapper(base):
                 return None
             elif label == "best":
                 indices = torch.argmax(output).detach().cpu().numpy()
-            else:
+            elif isinstance(label, int):
                 indices = (output == label).nonzero()
                 indices = [index[0] * output.shape[1] + index[1] for index in indices]  # TODO: Not compatible with 3D data
+            else:
+                indices = label(output)
             mask = np.zeros(output.shape)
             np.put(mask, indices, 1)
             mask = torch.FloatTensor(mask).to(self.device)
