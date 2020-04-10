@@ -4,6 +4,7 @@ from pathlib import Path
 import types
 import functools
 import pickle
+import pandas as pd
 from gcam.grad_cam.backends.guided_backpropagation import create_guided_back_propagation
 from gcam.grad_cam.backends.grad_cam import create_grad_cam
 from gcam.grad_cam.backends.guided_grad_cam import create_guided_grad_cam
@@ -42,7 +43,7 @@ def create_gcam_hook(base):
             self.evaluation_metric = evaluation_metric
             self.return_score = return_score
             self.pickle_maps = []
-            self.log = []
+            self.log = pd.DataFrame(columns=['ID', 'Score', 'Layer'])
 
             if self.output_dir is None and (self.save_log is not None or self.save_maps is not None or self.save_pickle is not None):
                 raise AttributeError("output_dir needs to be set if save_log, save_maps or save_pickle is set to true")
@@ -133,7 +134,7 @@ def create_gcam_hook(base):
                     self._save_attention_map(attention_map_j, layer_output_dir)
                     if self.evaluate:
                         score = self._evaluate(attention_map_j, batch, mask)
-                        self._log_results(score, batch_id, layer_name, j)
+                        self._log_results(score, layer_name, batch_id, j, batch_size)
                         layer_scores.append(score)
                     self.counter += 1
                 if self.evaluate:
@@ -145,7 +146,7 @@ def create_gcam_hook(base):
                 save_attention_map(filename=layer_output_dir + "/attention_map_" + str(self.counter) + ".png", attention_map=attention_map, backend=self.backend)
             elif self.save_pickle:
                 self.pickle_maps.append(attention_map)
-                with open('filename.pickle', 'wb') as handle:
+                with open('attention_maps.pkl', 'wb') as handle:
                     pickle.dump(self.output_dir + "/attention_maps.pkl", handle, protocol=pickle.HIGHEST_PROTOCOL)
 
         def _evaluate(self, attention_map, batch, mask):
@@ -156,8 +157,13 @@ def create_gcam_hook(base):
             # TODO: Use default metric in metric class
             return 0
 
-        def _log_results(self, score, batch_id, layer_name, j):
-            # TODO: Check if batch_id is list or int, if list use id = batch_id[j] else id = batch_id + j
-            pass
+        def _log_results(self, score, layer_name, batch_id, j, batch_size):
+            if isinstance(batch_id, int):
+                ID = batch_id
+            else:
+                ID = batch_id * batch_size + j
+            new_entry = pd.DataFrame([[ID, score, layer_name]], columns=['ID', 'Score', 'Layer'])
+            self.log.append(new_entry)
+            self.log.to_csv(self.output_dir + "/log.csv", index=False)
 
     return GcamHook
