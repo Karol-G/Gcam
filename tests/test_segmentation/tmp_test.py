@@ -24,7 +24,7 @@ class Tmp():
 
     def test_gbp_hook(self):
         model = Gcam(self.model, output_dir="results/unet_seg/test_gbp_hook", backend="gbp",
-                     postprocessor="sigmoid", evaluate=True, save_log=True, save_maps=True, save_pickle=True, call_dump=True)
+                     postprocessor="sigmoid", evaluate=True, save_scores=True, save_maps=True, save_pickle=True, call_dump=True)
         model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
         # TODO: Memory leak finden (Oder nur beim testen?)
@@ -47,13 +47,13 @@ class Tmp():
     def test_gcam_hook(self):
         layer = 'full'
         model = Gcam(self.model, output_dir="results/unet_seg/test_gcam_hook", backend="gcam", layer=layer,
-                                postprocessor="sigmoid", evaluate=True, save_log=True, save_maps=True, save_pickle=True, call_dump=True, metric="wioa")
+                                postprocessor="sigmoid", evaluate=True, save_scores=True, save_maps=True, save_pickle=True, metric="wioa")
         model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
         # TODO: Memory leak finden (Oder nur beim testen?)
         #outputs = []
         for i, batch in enumerate(data_loader):
-            output = model(batch["img"], batch_id=i, mask=batch["gt"])
+            output = model(batch["img"], mask=batch["gt"])
             #outputs.append(output)
 
         model.dump()
@@ -70,7 +70,7 @@ class Tmp():
     def test_ggcam_hook(self):
         layer = 'full'
         model = Gcam(self.model, output_dir="results/unet_seg/test_ggcam_hook", backend="ggcam", layer=layer,
-                                postprocessor="sigmoid", evaluate=True, save_log=True, save_maps=True, save_pickle=True, call_dump=True)
+                                postprocessor="sigmoid", evaluate=True, save_scores=True, save_maps=True, save_pickle=True)
         model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
         # TODO: Memory leak finden (Oder nur beim testen?)
@@ -93,7 +93,7 @@ class Tmp():
     def test_gcampp_hook(self):
         layer = 'full'
         model = Gcam(self.model, output_dir="results/unet_seg/test_gcampp_hook", backend="gcampp", layer=layer,
-                     postprocessor="sigmoid", evaluate=True, save_log=True, save_maps=True, save_pickle=True, call_dump=True)
+                     postprocessor="sigmoid", evaluate=True, save_scores=True, save_maps=True, save_pickle=True)
         model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
         # TODO: Memory leak finden (Oder nur beim testen?)
@@ -116,7 +116,7 @@ class Tmp():
     def test_gcam_hook_attribute_copy(self):
         layer = 'full'
         gcam_model = Gcam(self.model, output_dir="results/unet_seg/test_gcam_hook", backend="gcam", layer=layer,
-                     postprocessor="sigmoid", evaluate=True, save_log=True, save_maps=True, save_pickle=True, call_dump=True)
+                     postprocessor="sigmoid", evaluate=True, save_scores=True, save_maps=True, save_pickle=True)
 
         self.model.set_value(1)
         assert(self.model.get_value() == 1)
