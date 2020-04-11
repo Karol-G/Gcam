@@ -1,9 +1,7 @@
 import numpy as np
 import cv2
-import gc
-import torch
-from gcam.grad_cam.backends.grad_cam import create_grad_cam
-from gcam.grad_cam.backends.guided_backpropagation import create_guided_back_propagation
+from gcam.backends.grad_cam import create_grad_cam
+from gcam.backends.guided_backpropagation import create_guided_back_propagation
 
 def create_guided_grad_cam(base):
     class GuidedGradCam(base):

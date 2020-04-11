@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 from torch import nn
-from gcam.grad_cam.backends.base import create_base_wrapper
+from gcam.backends.base import create_base_wrapper
 
 def create_guided_back_propagation(base):
     class GuidedBackPropagation(create_base_wrapper(base)):

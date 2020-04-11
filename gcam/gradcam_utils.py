@@ -54,3 +54,6 @@ def _resize_attention_map(attention_map, min_shape):
         data_shape = (attention_map_shape[0] * resize_factor, attention_map_shape[1] * resize_factor)
         attention_map = cv2.resize(attention_map, tuple(np.flip(data_shape)))
     return attention_map
+
+def normalize(x):
+    return (x-np.min(x))/(np.max(x)-np.min(x))

@@ -44,15 +44,17 @@ class Tmp():
 
     def test_gcam_hook(self):
         layer = 'full'
-        model = gcam.inject(self.model, output_dir="results/unet_seg/test_gcam_hook", backend="gcam", layer=layer, input_key=None, mask_key=None, postprocessor="sigmoid", save_maps=True)
+        model = gcam.inject(self.model, output_dir="results/unet_seg/test_gcam_hook", backend="gcam", layer=layer,
+                            postprocessor="sigmoid", evaluate=True, save_log=True, save_maps=True, save_pickle=True, call_dump=True)
         model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
         # TODO: Memory leak finden (Oder nur beim testen?)
         #outputs = []
         for i, batch in enumerate(data_loader):
-            output = model(batch["img"])
+            output = model(batch["img"], batch_id=i, mask=batch["gt"])
             #outputs.append(output)
 
+        model.dump()
         gc.collect()
         torch.cuda.empty_cache()
 

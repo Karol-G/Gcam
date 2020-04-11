@@ -1,8 +1,7 @@
-from collections import OrderedDict
 import numpy as np
 import torch
 from torch.nn import functional as F
-from gcam.grad_cam.backends.grad_cam import create_grad_cam
+from gcam.backends.grad_cam import create_grad_cam
 
 def create_grad_cam_pp(base):
     class GradCamPP(create_grad_cam(base)):

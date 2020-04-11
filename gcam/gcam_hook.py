@@ -1,14 +1,15 @@
 import torch
-from gcam.grad_cam.gradcam_utils import *
 from pathlib import Path
 import types
 import functools
 import pickle
 import pandas as pd
-from gcam.grad_cam.backends.guided_backpropagation import create_guided_back_propagation
-from gcam.grad_cam.backends.grad_cam import create_grad_cam
-from gcam.grad_cam.backends.guided_grad_cam import create_guided_grad_cam
-from gcam.grad_cam.backends.grad_cam_pp import create_grad_cam_pp
+from gcam.gradcam_utils import *
+from gcam.backends.guided_backpropagation import create_guided_back_propagation
+from gcam.backends.grad_cam import create_grad_cam
+from gcam.backends.guided_grad_cam import create_guided_grad_cam
+from gcam.backends.grad_cam_pp import create_grad_cam_pp
+from gcam import score_metrics
 
 # TODO: Set requirements in setup.py
 
@@ -18,7 +19,7 @@ def gcam_hook(model):
 
 def create_gcam_hook(base):
     class GcamHook(base):
-        def __init__(self, model, output_dir, backend, layer, input_key, mask_key, postprocessor, retain_graph, dim, save_log, save_maps, save_pickle, evaluate, evaluation_metric, return_score):
+        def __init__(self, model, output_dir, backend, layer, input_key, mask_key, postprocessor, retain_graph, dim, save_log, save_maps, save_pickle, evaluate, evaluation_metric, return_score, call_dump):
             super(GcamHook, self).__init__()
             self.__dict__ = model.__dict__.copy()
             #torch.backends.cudnn.enabled = False # TODO: out of memory
@@ -42,6 +43,7 @@ def create_gcam_hook(base):
             self.evaluate = evaluate
             self.evaluation_metric = evaluation_metric
             self.return_score = return_score
+            self.call_dump = call_dump
             self.pickle_maps = []
             self.log = pd.DataFrame(columns=['ID', 'Score', 'Layer'])
 
@@ -61,8 +63,8 @@ def create_gcam_hook(base):
             else:
                 raise TypeError("Backend does not exist")
 
-        def __call__(self, batch, label=None):
-            return self.forward(batch, label)
+        def __call__(self, batch, label=None, mask=None, batch_id=None):
+            return self.forward(batch, label, mask, batch_id)
 
         def forward(self, batch, label=None, mask=None, batch_id=None):
             #print("-------------------------- FORWARD GCAM HOOK --------------------------")
@@ -133,37 +135,66 @@ def create_gcam_hook(base):
                     attention_map_j = attention_map[layer_name][j]
                     self._save_attention_map(attention_map_j, layer_output_dir)
                     if self.evaluate:
-                        score = self._evaluate(attention_map_j, batch, mask)
+                        score = self._evaluate(attention_map_j, batch, mask[j].squeeze())
                         self._log_results(score, layer_name, batch_id, j, batch_size)
                         layer_scores.append(score)
                     self.counter += 1
                 if self.evaluate:
                     scores[layer_name] = layer_scores
+                if not self.call_dump:
+                    self.dump()
             return scores
 
         def _save_attention_map(self, attention_map, layer_output_dir):
+            if self.save_pickle:
+                self.pickle_maps.append(attention_map)
             if self.save_maps:
                 save_attention_map(filename=layer_output_dir + "/attention_map_" + str(self.counter) + ".png", attention_map=attention_map, backend=self.backend)
-            elif self.save_pickle:
-                self.pickle_maps.append(attention_map)
-                with open('attention_maps.pkl', 'wb') as handle:
-                    pickle.dump(self.output_dir + "/attention_maps.pkl", handle, protocol=pickle.HIGHEST_PROTOCOL)
 
-        def _evaluate(self, attention_map, batch, mask):
+        def _evaluate(self, attention_map, batch, mask):  # TODO: Not multiclass compatible, maybe multiclass parameter in init?
+            ATTENTION_THRESHOLD = 0  # 80
+            DILATE = 0
             if self.mask_key is not None:
                 mask = batch[self.mask_key]
             elif mask is None:
-                raise AttributeError("Either mask_key during initialization or mask during forward needs to be set")
-            # TODO: Use default metric in metric class
-            return 0
+               raise AttributeError("Either mask_key during initialization or mask during forward needs to be set")
+            if isinstance(mask, torch.Tensor):
+                mask = mask.detach().cpu().numpy()
+            else:
+                mask = np.asarray(mask)
+            unique = np.unique(mask)  # TODO: Slow?
+            if (unique[0] == 0 or unique[0] == 0.0) and (unique[1] == 1 or unique[1] == 1.0):
+                mask = mask.astype(np.uint8)
+                mask *= 255
+            elif (unique[0] == 0 or unique[0] == 0.0) and (unique[1] == 255 or unique[1] == 255.0):
+                mask = mask.astype(np.uint8)
+            elif unique[0] == False and unique[1] == True:
+                mask = mask.astype(np.uint8)
+                mask *= 255
+            else:
+                raise TypeError("Mask values need to be either 0/1, 0/255 or False/True")
+            if self.evaluation_metric == "default":
+                score = score_metrics.overlap_score(attention_map, mask, ATTENTION_THRESHOLD, DILATE)
+            else:
+                score = self.evaluation_metric(attention_map, mask, ATTENTION_THRESHOLD, DILATE)
+            return score
 
         def _log_results(self, score, layer_name, batch_id, j, batch_size):
-            if isinstance(batch_id, int):
-                ID = batch_id
-            else:
-                ID = batch_id * batch_size + j
-            new_entry = pd.DataFrame([[ID, score, layer_name]], columns=['ID', 'Score', 'Layer'])
-            self.log.append(new_entry)
-            self.log.to_csv(self.output_dir + "/log.csv", index=False)
+            if self.save_log:
+                if isinstance(batch_id, int):
+                    ID = batch_id
+                elif isinstance(batch_id, list):
+                    ID = batch_id * batch_size + j
+                else:
+                    ID = "None"
+                new_entry = pd.DataFrame([[ID, score, layer_name]], columns=['ID', 'Score', 'Layer'])
+                self.log = self.log.append(new_entry)
+
+        def dump(self):
+            if self.save_pickle:
+                with open(self.output_dir + '/attention_maps.pkl', 'wb') as handle:
+                    pickle.dump(self.pickle_maps, handle, protocol=pickle.HIGHEST_PROTOCOL)
+            if self.save_log:
+                self.log.to_csv(self.output_dir + "/log.csv", index=False)
 
     return GcamHook

@@ -4,7 +4,7 @@ from utils.logger import *
 from utils.utils import *
 from utils.datasets import *
 from utils.parse_config import *
-from gcam.test import evaluate
+from legacy.test import evaluate
 
 from terminaltables import AsciiTable
 

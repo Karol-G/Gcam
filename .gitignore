@@ -104,7 +104,7 @@ ENV/
 .DS_Store
 
 .idea/
-gcam/grad_cam/results/
+legacy/results/
 gcam/grad_cam_plus_plus/outputs/
 data/tumor_seg_data/
 

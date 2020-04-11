@@ -2,7 +2,7 @@ from collections import OrderedDict
 import numpy as np
 import torch
 from torch.nn import functional as F
-from gcam.grad_cam.backends.base import create_base_wrapper
+from gcam.backends.base import create_base_wrapper
 
 def detach_output(output):  # TODO: Is this needed? Is this correct?
     if not isinstance(output, torch.Tensor):

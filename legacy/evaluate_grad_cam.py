@@ -4,8 +4,7 @@ from torch.utils.data import DataLoader
 import time
 import cv2
 import numpy as np
-from gcam.grad_cam import grad_cam
-from gcam.grad_cam.gradcam_utils import *
+from legacy import grad_cam
 from pathlib import Path
 from collections import defaultdict
 import pickle
