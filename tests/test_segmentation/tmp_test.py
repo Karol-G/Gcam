@@ -1,6 +1,6 @@
 from tests.test_segmentation.unet_seg_dataset import UnetSegDataset as Dataset
 from tests.test_segmentation.model.unet.unet_model import UNet
-from gcam import gcam
+from gcam.gcam import Gcam
 import torch
 import os
 from os import path
@@ -23,7 +23,8 @@ class Tmp():
         self.model.eval()
 
     def test_gbp_hook(self):
-        model = gcam.inject(self.model, output_dir="results/unet_seg/test_gbp_hook", backend="gbp", input_key=None, mask_key=None, postprocessor="sigmoid")
+        model = Gcam(self.model, output_dir="results/unet_seg/test_gbp_hook", backend="gbp",
+                     postprocessor="sigmoid", evaluate=True, save_log=True, save_maps=True, save_pickle=True, call_dump=True)
         model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
         # TODO: Memory leak finden (Oder nur beim testen?)
@@ -32,6 +33,7 @@ class Tmp():
             output = model(batch["img"])
             #outputs.append(output)
 
+        model.dump()
         gc.collect()
         torch.cuda.empty_cache()
 
@@ -44,8 +46,8 @@ class Tmp():
 
     def test_gcam_hook(self):
         layer = 'full'
-        model = gcam.inject(self.model, output_dir="results/unet_seg/test_gcam_hook", backend="gcam", layer=layer,
-                            postprocessor="sigmoid", evaluate=True, save_log=True, save_maps=True, save_pickle=True, call_dump=True)
+        model = Gcam(self.model, output_dir="results/unet_seg/test_gcam_hook", backend="gcam", layer=layer,
+                                postprocessor="sigmoid", evaluate=True, save_log=True, save_maps=True, save_pickle=True, call_dump=True)
         model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
         # TODO: Memory leak finden (Oder nur beim testen?)
@@ -67,7 +69,8 @@ class Tmp():
 
     def test_ggcam_hook(self):
         layer = 'full'
-        model = gcam.inject(self.model, output_dir="results/unet_seg/test_ggcam_hook", backend="ggcam", layer=layer, input_key=None, mask_key=None, postprocessor="sigmoid", save_maps=True)
+        model = Gcam(self.model, output_dir="results/unet_seg/test_ggcam_hook", backend="ggcam", layer=layer,
+                                postprocessor="sigmoid", evaluate=True, save_log=True, save_maps=True, save_pickle=True, call_dump=True)
         model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
         # TODO: Memory leak finden (Oder nur beim testen?)
@@ -76,6 +79,7 @@ class Tmp():
             output = model(batch["img"])
             #outputs.append(output)
 
+        model.dump()
         gc.collect()
         torch.cuda.empty_cache()
 
@@ -88,7 +92,8 @@ class Tmp():
 
     def test_gcampp_hook(self):
         layer = 'full'
-        model = gcam.inject(self.model, output_dir="results/unet_seg/test_gcampp_hook", backend="gcampp", layer=layer, input_key=None, mask_key=None, postprocessor="sigmoid", save_maps=True)
+        model = Gcam(self.model, output_dir="results/unet_seg/test_gcampp_hook", backend="gcampp", layer=layer,
+                     postprocessor="sigmoid", evaluate=True, save_log=True, save_maps=True, save_pickle=True, call_dump=True)
         model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
         # TODO: Memory leak finden (Oder nur beim testen?)
@@ -97,6 +102,7 @@ class Tmp():
             output = model(batch["img"])
             #outputs.append(output)
 
+        model.dump()
         gc.collect()
         torch.cuda.empty_cache()
 
@@ -109,7 +115,8 @@ class Tmp():
 
     def test_gcam_hook_attribute_copy(self):
         layer = 'full'
-        gcam_model = gcam.inject(self.model, output_dir="results/unet_seg/test_gcam_hook", backend="gcam", layer=layer, input_key=None, mask_key=None, postprocessor="sigmoid", save_maps=True)
+        gcam_model = Gcam(self.model, output_dir="results/unet_seg/test_gcam_hook", backend="gcam", layer=layer,
+                     postprocessor="sigmoid", evaluate=True, save_log=True, save_maps=True, save_pickle=True, call_dump=True)
 
         self.model.set_value(1)
         assert(self.model.get_value() == 1)

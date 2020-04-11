@@ -1,10 +1,8 @@
 from tests.test_segmentation.unet_seg_dataset import UnetSegDataset as Dataset
 from tests.test_segmentation.model.unet.unet_model import UNet
-from gcam import gcam
+from legacy import gcam_old
 import torch
 import os
-from os import path
-import shutil
 import unittest
 from torch.utils.data import DataLoader
 import gc
@@ -60,7 +58,7 @@ class TestSegmentation(unittest.TestCase):
 
 
     def test_gbp_hook(self):
-        model = gcam.inject(self.model, output_dir="results/unet_seg/test_gbp_hook", backend="gbp", input_key=None, mask_key=None, postprocessor="sigmoid")
+        model = gcam_old.inject(self.model, output_dir="results/unet_seg/test_gbp_hook", backend="gbp", input_key=None, mask_key=None, postprocessor="sigmoid")
         model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
         # TODO: Memory leak finden (Oder nur beim testen?)
@@ -81,7 +79,7 @@ class TestSegmentation(unittest.TestCase):
 
     def test_gcam_hook(self):
         layer = 'full'
-        model = gcam.inject(self.model, output_dir="results/unet_seg/test_gcam_hook", backend="gcam", layer=layer, input_key=None, mask_key=None, postprocessor="sigmoid")
+        model = gcam_old.inject(self.model, output_dir="results/unet_seg/test_gcam_hook", backend="gcam", layer=layer, input_key=None, mask_key=None, postprocessor="sigmoid")
         model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
         # TODO: Memory leak finden (Oder nur beim testen?)
@@ -102,7 +100,7 @@ class TestSegmentation(unittest.TestCase):
 
     def test_ggcam_hook(self):
         layer = 'full'
-        model = gcam.inject(self.model, output_dir="results/unet_seg/test_ggcam_hook", backend="ggcam", layer=layer, input_key=None, mask_key=None, postprocessor="sigmoid")
+        model = gcam_old.inject(self.model, output_dir="results/unet_seg/test_ggcam_hook", backend="ggcam", layer=layer, input_key=None, mask_key=None, postprocessor="sigmoid")
         model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
         # TODO: Memory leak finden (Oder nur beim testen?)
@@ -123,7 +121,7 @@ class TestSegmentation(unittest.TestCase):
 
     def test_gcam_hook_attribute_copy(self):
         layer = 'full'
-        gcam_model = gcam.inject(self.model, output_dir="results/unet_seg/test_gcam_hook", backend="gcam", layer=layer, input_key=None, mask_key=None, postprocessor="sigmoid")
+        gcam_model = gcam_old.inject(self.model, output_dir="results/unet_seg/test_gcam_hook", backend="gcam", layer=layer, input_key=None, mask_key=None, postprocessor="sigmoid")
 
         self.model.set_value(1)
         assert(self.model.get_value() == 1)

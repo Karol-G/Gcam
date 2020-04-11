@@ -1,6 +1,6 @@
 from torchvision import models, transforms
 from torchvision.datasets import ImageFolder
-from gcam import gcam
+from legacy import gcam_old
 import torch
 import cv2
 from torch.utils.data import DataLoader
@@ -29,7 +29,7 @@ class Tmp():
         return image
 
     def test_gbp_hook(self):
-        model = gcam.inject(self.model, output_dir="results/resnet152/test_gbp_hook", backend="gbp", input_key=None, mask_key=None, postprocessor="softmax")
+        model = gcam_old.inject(self.model, output_dir="results/resnet152/test_gbp_hook", backend="gbp", input_key=None, mask_key=None, postprocessor="softmax")
         model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
         # TODO: Memory leak finden (Oder nur beim testen?)
@@ -50,7 +50,7 @@ class Tmp():
 
     def test_gcam_hook(self):
         layer = 'layer4'
-        model = gcam.inject(self.model, output_dir="results/resnet152/test_gcam_hook", backend="gcam", layer=layer, input_key=None, mask_key=None, postprocessor="softmax")
+        model = gcam_old.inject(self.model, output_dir="results/resnet152/test_gcam_hook", backend="gcam", layer=layer, input_key=None, mask_key=None, postprocessor="softmax")
         model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
         # TODO: Memory leak finden (Oder nur beim testen?)
@@ -71,7 +71,7 @@ class Tmp():
 
     def test_ggcam_hook(self):
         layer = 'layer4'
-        model = gcam.inject(self.model, output_dir="results/resnet152/test_ggcam_hook", backend="ggcam", layer=layer, input_key=None, mask_key=None, postprocessor="softmax")
+        model = gcam_old.inject(self.model, output_dir="results/resnet152/test_ggcam_hook", backend="ggcam", layer=layer, input_key=None, mask_key=None, postprocessor="softmax")
         model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
         # TODO: Memory leak finden (Oder nur beim testen?)
@@ -92,7 +92,7 @@ class Tmp():
 
     def test_gcampp_hook(self):
         layer = 'layer4'
-        model = gcam.inject(self.model, output_dir="results/resnet152/test_gcampp_hook", backend="gcampp", layer=layer, input_key=None, mask_key=None, postprocessor="softmax")
+        model = gcam_old.inject(self.model, output_dir="results/resnet152/test_gcampp_hook", backend="gcampp", layer=layer, input_key=None, mask_key=None, postprocessor="softmax")
         model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
         # TODO: Memory leak finden (Oder nur beim testen?)
