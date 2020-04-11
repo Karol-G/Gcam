@@ -1,29 +1,35 @@
 import numpy as np
 import cv2
+import copy
 
-def preprocessing(attention_map, mask, attention_threshold, dilate_value):
-    mask = _dilate_mask(mask, dilate_value)
-    attention_map = _resize_attention_map(attention_map, mask.shape)  # _resize_image(ground_truth, attention_map)
-    mask = np.array(mask, dtype=np.uint8)
-    attention_map -= np.min(attention_map)
-    attention_map /= np.max(attention_map)
+def preprocessing(attention_map, mask, attention_threshold):
+    attention_map = _resize_attention_map(attention_map, mask.shape)
+    weights = copy.deepcopy(attention_map)
+    mask = np.array(mask, dtype=int)
     attention_map[attention_map < attention_threshold] = 0
     attention_map[attention_map >= attention_threshold] = 1
-    attention_map *= 255.0
-    attention_map = np.array(attention_map, dtype=np.uint8)
-    return attention_map, mask
-
-def _dilate_mask(mask, dilate_value):
-    if dilate_value > 0:
-        kernel = np.ones((dilate_value, dilate_value), np.uint8)
-        return cv2.dilate(mask, kernel, iterations=1)
-    return mask
+    attention_map = np.array(attention_map, dtype=int)
+    return attention_map, mask, weights
 
 def _resize_attention_map(attention_map, target_shape):
     return cv2.resize(attention_map, tuple(np.flip(target_shape)))
 
-def overlap_score(attention_map, mask):  # TODO: Rename method
-    overlap_percentage = cv2.bitwise_and(attention_map, attention_map, mask=mask)
-    attention_map = np.sum(attention_map)
-    overlap_percentage = np.sum(overlap_percentage) / attention_map
-    return overlap_percentage
+def intersection_over_attention(binary_attention_map, mask, weights):
+    intersection = binary_attention_map & mask
+    if weights is not None:
+        intersection = intersection.astype(np.float) * weights
+        binary_attention_map = binary_attention_map.astype(np.float) * weights
+    ioa = np.sum(intersection) / np.sum(binary_attention_map)
+    return ioa
+
+def intersection_over_union(binary_attention_map, mask, weights):  # TODO: wiou is bad and wrong, maybe not even possible?
+    intersection = binary_attention_map & mask
+    if weights is not None:
+        outer_attention = binary_attention_map - intersection
+        outer_attention = outer_attention.astype(np.float) * weights
+        union = outer_attention + mask.astype(np.float)
+        intersection = intersection.astype(np.float) * weights
+    else:
+        union = binary_attention_map | mask
+    iou = np.sum(intersection) / np.sum(union).astype(np.float)
+    return iou

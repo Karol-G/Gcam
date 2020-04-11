@@ -2,9 +2,9 @@ import torch
 import numpy as np
 import cv2
 
-image = np.full((5,5), 0, dtype=bool)
-mask = np.full((5,5), 255, dtype=bool)
-image[0][0] = True
-#result = cv2.bitwise_and(image, image, mask=mask)
-unique = np.unique(image)
-print(unique)
+attention_map = np.full((5,5), 2, dtype=int)
+mask = np.full((5,5), 1, dtype=int)
+#result1 = cv2.bitwise_and(attention_map, attention_map, mask=mask)
+result2 = intersection = attention_map & mask
+#print(result1)
+print(result2)

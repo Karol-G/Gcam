@@ -15,7 +15,7 @@ from gcam import score_metrics
 
 class Gcam():
     def __init__(self, model, output_dir=None, backend="gcam", layer='auto', input_key=None, mask_key=None, postprocessor=None,
-                 retain_graph=False, dim=2, save_log=False, save_maps=False, save_pickle=False, evaluate=False, evaluation_metric="default", return_score=False, call_dump=False):
+                 retain_graph=False, dim=2, save_log=False, save_maps=False, save_pickle=False, evaluate=False, metric="ioa", return_score=False, call_dump=False, threshold=0.3):
         super(Gcam, self).__init__()
         self.__dict__ = model.__dict__.copy()
         # torch.backends.cudnn.enabled = False # TODO: out of memory
@@ -35,9 +35,10 @@ class Gcam():
         self.save_maps = save_maps
         self.save_pickle = save_pickle
         self.evaluate = evaluate
-        self.evaluation_metric = evaluation_metric
+        self.metric = metric
         self.return_score = return_score
         self.call_dump = call_dump
+        self.threshold = threshold
         self.pickle_maps = []
         self.log = pd.DataFrame(columns=['ID', 'Score', 'Layer'])
 
@@ -147,8 +148,6 @@ class Gcam():
             save_attention_map(filename=layer_output_dir + "/attention_map_" + str(self.counter) + ".png", attention_map=attention_map, backend=self.backend)
 
     def _evaluate(self, attention_map, batch, mask):  # TODO: Not multiclass compatible, maybe multiclass parameter in init?
-        ATTENTION_THRESHOLD = 0.3
-        DILATE = 0
         if self.mask_key is not None:
             mask = batch[self.mask_key]
         elif mask is None:
@@ -157,22 +156,20 @@ class Gcam():
             mask = mask.detach().cpu().numpy()
         else:
             mask = np.asarray(mask)
-        unique = np.unique(mask)  # TODO: Slow?
-        if (unique[0] == 0 or unique[0] == 0.0) and (unique[1] == 1 or unique[1] == 1.0):
-            mask = mask.astype(np.uint8)
-            mask *= 255
-        elif (unique[0] == 0 or unique[0] == 0.0) and (unique[1] == 255 or unique[1] == 255.0):
-            mask = mask.astype(np.uint8)
-        elif unique[0] == False and unique[1] == True:
-            mask = mask.astype(np.uint8)
-            mask *= 255
+        allowed = [0, 1, 0.0, 1.0]
+        if np.min(mask) in allowed and np.max(mask) in allowed:
+            mask = mask.astype(int)
         else:
-            raise TypeError("Mask values need to be either 0/1, 0/255 or False/True")
-        attention_map, mask = score_metrics.preprocessing(attention_map, mask, ATTENTION_THRESHOLD, DILATE)
-        if self.evaluation_metric == "default":
-            score = score_metrics.overlap_score(attention_map, mask)
+            raise TypeError("Mask values need to be 0/1")
+        binary_attention_map, mask, weights = score_metrics.preprocessing(attention_map, mask, self.threshold)
+        if self.metric[0] != "w":
+            weights = None
+        if self.metric == "ioa" or self.metric == "wioa":
+            score = score_metrics.intersection_over_attention(binary_attention_map, mask, weights)
+        elif self.metric == "iou" or self.metric == "wiou":
+            score = score_metrics.intersection_over_union(binary_attention_map, mask, weights)
         else:
-            score = self.evaluation_metric(attention_map, mask)
+            score = self.metric(attention_map, mask, attention_map, weights)
         return score
 
     def _log_results(self, score, layer_name, batch_id, j, batch_size):
