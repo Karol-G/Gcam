@@ -45,7 +45,7 @@ class Tmp():
         #     shutil.rmtree("results")
 
     def test_gcam_hook(self):
-        layer = 'full'
+        layer = 'auto'
         model = Gcam(self.model, output_dir="results/unet_seg/test_gcam_hook", backend="gcam", layer=layer,
                                 postprocessor="sigmoid", evaluate=True, save_scores=True, save_maps=True, save_pickle=True, metric="wioa")
         model.eval()

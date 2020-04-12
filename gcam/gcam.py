@@ -41,7 +41,6 @@ class Gcam():
         self.return_score = return_score
         self.threshold = threshold
         self.pickle_maps = []
-        #self.log = pd.DataFrame(columns=['ID', 'Score', 'Layer'])
         self.scores = defaultdict(list)
 
         if self.output_dir is None and (self.save_scores is not None or self.save_maps is not None or self.save_pickle is not None):
@@ -68,7 +67,7 @@ class Gcam():
         with torch.enable_grad():
             batch_size, data_shape = self._unpack_batch(batch)
             output = self.model_backend.forward(batch, data_shape)
-            self.model_backend.backward(output=output, label=label)
+            self.model_backend.backward(output=output, label=label)  # TODO: Check if I can remove output
             attention_map = self.model_backend.generate()
             scores = self._process_attention_maps(attention_map, batch, mask, batch_size)
             if self.return_score:
@@ -172,6 +171,10 @@ class Gcam():
         df = df.append(new_entry)
         df.insert(0, "Layer", score_ids, True)
         df.to_csv(self.output_dir + "/scores.csv", index=False)
+
+    def get_layers(self, reverse=False):
+        return self.model_backend.layers()
+
 
     def __getattr__(self, method):
         def abstract_method(*args):

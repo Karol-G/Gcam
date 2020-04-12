@@ -34,7 +34,7 @@ def create_base_wrapper(base):
                 self.logits = output
 
             self.logits = self.post_processing(self.postprocessor, self.logits)
-            mask = self._generate_mask(output, label)
+            mask = self._mask_output(output, label)
 
             if mask is None:
                 self.logits.backward(gradient=self.logits, retain_graph=self.retain_graph)
@@ -52,7 +52,7 @@ def create_base_wrapper(base):
                 output = postprocessor(output)
             return output
 
-        def _generate_mask(self, output, label):
+        def _mask_output(self, output, label):
             if label is None:
                 return None
             elif label == "best":
@@ -76,5 +76,32 @@ def create_base_wrapper(base):
             """
             for handle in self.handlers:
                 handle.remove()
+
+        def layers(self, reverse=False):
+            layer_names = []
+            for name, _ in self.model.named_modules():
+                layer_names.append(name)
+
+            if layer_names[0] == "":
+                layer_names = layer_names[1:]
+
+            index = 0
+            sub_index = 0
+            while True:
+                if index == len(layer_names) - 1:
+                    break
+                if sub_index < len(layer_names) - 1 and layer_names[index] == layer_names[sub_index + 1][:len(layer_names[index])]:
+                    sub_index += 1
+                elif sub_index > index:
+                    layer_names.insert(sub_index, layer_names.pop(index))
+                    sub_index = index
+                else:
+                    index += 1
+                    sub_index = index
+
+            if reverse:
+                layer_names.reverse()
+
+            return layer_names
 
     return _BaseWrapper

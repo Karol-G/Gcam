@@ -80,31 +80,27 @@ def create_grad_cam(base):
             self.data_shape = data_shape
             return super(GradCAM, self).forward(data)
 
-        def _select_highest_layer(self):
-            # TODO: Does not always select highest layer
-            # TODO: Rename method
+        def _auto_layer_selection(self):
+            # It's ugly but it works ;)
             fmap_list, weight_list = [], []
-            module_names = []
-            for name, _ in self.model.named_modules():
-                module_names.append(name)
-            module_names.reverse()
+            module_names = self.layers(reverse=True)
             found_valid_layer = False
 
             for i in range(self.logits.shape[0]):
                 counter = 0
                 for layer in module_names:
                     try:
-                        fmaps = self._find(self.fmap_pool, layer)
-                        np.shape(fmaps)  # Throws error without this line, I have no idea why...
-                        fmaps = fmaps[i]
+                        fmaps = self._find(self.fmap_pool, layer)[i]  # If an exception is raised, remove [i] and decomment line "np.shape(fmaps)" and "fmaps = fmaps[i]"
+                        #np.shape(fmaps)
+                        #fmaps = fmaps[i]
                         grads = self._find(self.grad_pool, layer)[i]
                         nonzeros = np.count_nonzero(grads.detach().cpu().numpy())
                         self._compute_grad_weights(grads)
                         if nonzeros == 0 or not isinstance(fmaps, torch.Tensor) or not isinstance(grads, torch.Tensor):
                             counter += 1
                             continue
-                        print("Dismissed the last {} module layers (Note: This number can be inflated if the model contains many nested module layers)".format(counter))
-                        print("Selected module layer: {}".format(layer))
+                        #print("Dismissed the last {} module layers (Note: This number can be inflated if the model contains many nested module layers)".format(counter))
+                        #print("Selected module layer: {}".format(layer))
                         fmap_list.append(self._find(self.fmap_pool, layer)[i])
                         grads = self._find(self.grad_pool, layer)[i]
                         weight_list.append(self._compute_grad_weights(grads))
@@ -124,7 +120,7 @@ def create_grad_cam(base):
 
         def generate(self):
             if self._target_layers == "auto":
-                layer, fmaps, weights = self._select_highest_layer()
+                layer, fmaps, weights = self._auto_layer_selection()
                 self._check_hooks(layer)
                 attention_maps = []
                 for i in range(self.logits.shape[0]):
