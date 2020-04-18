@@ -118,7 +118,7 @@ class Gcam():
         if self.save_pickle:
             self.pickle_maps.append(attention_map)
         if self.save_maps:
-            save_attention_map(filename=layer_output_dir + "/attention_map_" + str(self.counter) + ".png", attention_map=attention_map, backend=self.backend)
+            save_attention_map(filename=layer_output_dir + "/attention_map_" + str(self.counter) + ".png", attention_map=attention_map, backend=self.backend, dim=self.dim)
 
     def _comp_score(self, attention_map, batch, mask):  # TODO: Not multiclass compatible, maybe multiclass parameter in init?
         if self.mask_key is not None:
@@ -173,16 +173,20 @@ class Gcam():
         df.to_csv(self.output_dir + "/scores.csv", index=False)
 
     def get_layers(self, reverse=False):
-        return self.model_backend.layers()
+        return self.model_backend.layers(reverse)
 
 
     def __getattr__(self, method):
-        def abstract_method(*args):
+        def abstract_method(*args, **kwargs):
             # print("-------------------------- ABSTRACT METHOD GCAM HOOK (" + method + ") --------------------------")
-            if args == ():
+            if args == () and kwargs == {}:
                 return self._copy_func(getattr(self.model, method))(self)
-            else:
+            elif args == ():
+                return self._copy_func(getattr(self.model, method))(self, **kwargs)
+            elif kwargs == {}:
                 return self._copy_func(getattr(self.model, method))(self, *args)
+            else:
+                return self._copy_func(getattr(self.model, method))(self, *args, **kwargs)
 
         return abstract_method
 

@@ -4,17 +4,25 @@ import matplotlib.cm as cm
 
 MIN_SHAPE = (500, 500)
 
-def save_attention_map(filename, attention_map, backend, data=None):
-    attention_map = generate_attention_map(attention_map, backend, data)
+def save_attention_map(filename, attention_map, backend, dim, data=None):
+    attention_map = generate_attention_map(attention_map, backend, dim, data)
     cv2.imwrite(filename, attention_map)
 
-def generate_attention_map(attention_map, heatmap, data=None):
-    if heatmap:
-        return generate_gcam(attention_map, data)
+def generate_attention_map(attention_map, heatmap, dim, data=None):
+    if dim == 2:
+        if heatmap:
+            return generate_gcam2d(attention_map, data)
+        else:
+            return generate_guided_bp2d(attention_map)
+    elif dim == 3:
+        if heatmap:
+            return generate_gcam3d(attention_map, data)
+        else:
+            return generate_guided_bp3d(attention_map)
     else:
-        return generate_guided_bp(attention_map)
+        raise RuntimeError("Unsupported dimension. Only 2D and 3D data is supported.")
 
-def generate_gcam(attention_map, data=None):
+def generate_gcam2d(attention_map, data=None):
     assert(len(attention_map.shape) == 2)  # No batch dim
     assert(isinstance(attention_map, np.ndarray))  # Not a tensor
     assert(isinstance(data, np.ndarray) or isinstance(data, str) or data is None)  # Not PIL
@@ -30,7 +38,31 @@ def generate_gcam(attention_map, data=None):
         attention_map = cm.jet_r(attention_map)[..., :3] * 255.0  # TODO: Still bugged with batch dim
     return np.uint8(attention_map)
 
-def generate_guided_bp(attention_map):
+def generate_guided_bp2d(attention_map):
+    assert(len(attention_map.shape) == 2)
+    assert (isinstance(attention_map, np.ndarray))  # Not a tensor
+    attention_map -= np.min(attention_map)
+    attention_map /= np.max(attention_map)
+    attention_map *= 255.0
+    attention_map = _resize_attention_map(attention_map, MIN_SHAPE)
+    return np.uint8(attention_map)
+
+def generate_gcam3d(attention_map, data=None):
+    assert(len(attention_map.shape) == 3)  # No batch dim
+    assert(isinstance(attention_map, np.ndarray))  # Not a tensor
+    assert(isinstance(data, np.ndarray) or data is None)  # Not PIL
+    assert(data is None or len(data.shape) == 3)
+
+    if data is not None:
+        attention_map = _resize_attention_map(attention_map, data.shape[:3])
+        cmap = cm.jet_r(attention_map)[..., :3] * 255.0  # TODO: Still bugged with batch dim
+        attention_map = (cmap.astype(np.float) + data.astype(np.float)) / 2  # TODO: Still bugged with batch dim
+    else:
+        attention_map = _resize_attention_map(attention_map, MIN_SHAPE)
+        attention_map = cm.jet_r(attention_map)[..., :3] * 255.0  # TODO: Still bugged with batch dim
+    return np.uint8(attention_map)
+
+def generate_guided_bp3d(attention_map):
     assert(len(attention_map.shape) == 2)
     assert (isinstance(attention_map, np.ndarray))  # Not a tensor
     attention_map -= np.min(attention_map)

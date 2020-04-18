@@ -165,13 +165,13 @@ def create_grad_cam(base):
             # attention_map /= attention_map.max(dim=1, keepdim=True)[0]
             # attention_map = attention_map.view(B, C, H, W)
 
-            B, C, H, W = attention_map.shape
+            B, *map_shape = attention_map.shape
             attention_map = attention_map.view(B, -1)
             attention_map_min = attention_map.min(dim=1, keepdim=True)[0]  # TODO: Make compatible i´with batch size bigger 1
             attention_map_max = attention_map.max(dim=1, keepdim=True)[0]  # TODO: Make compatible i´with batch size bigger 1
             attention_map -= attention_map_min
             attention_map /= (attention_map_max - attention_map_min)
-            attention_map = attention_map.view(B, C, H, W)
+            attention_map = attention_map.view(B, *map_shape)
 
             return attention_map
 
