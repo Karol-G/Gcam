@@ -30,8 +30,13 @@ def create_guided_back_propagation(base):
         def generate(self):
             attention_map = self.data.grad.clone()
             self.data.grad.zero_()
-            attention_map = attention_map.cpu().numpy().transpose(0, 2, 3, 1)
-            attention_map = np.mean(attention_map, axis=3)
+            attention_map = torch.mean(attention_map, dim=1)
+            attention_map = attention_map.cpu().numpy()
+            # if self.dim == 2:
+            #     attention_map = attention_map.cpu().numpy().transpose(0, 2, 3, 1)
+            # else:
+            #     attention_map = attention_map.cpu().numpy().transpose(0, 2, 3, 4, 1)
+            #attention_map = np.mean(attention_map, axis=3)
             #attention_map = torch.mean(attention_map, dim=1)
             attention_maps = {}
             attention_maps[""] = attention_map

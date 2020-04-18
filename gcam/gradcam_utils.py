@@ -5,8 +5,9 @@ import nibabel as nib
 
 MIN_SHAPE = (500, 500)
 
-def save_attention_map(filename, attention_map, backend, dim, data=None):
-    attention_map = generate_attention_map(attention_map, backend, dim, data)
+def save_attention_map(filename, attention_map, heatmap, dim, data=None):
+    attention_map = normalize(attention_map)
+    attention_map = generate_attention_map(attention_map, heatmap, dim, data)
     _save_attention_map(filename, attention_map, dim)
 
 def generate_attention_map(attention_map, heatmap, dim, data=None):
@@ -42,8 +43,8 @@ def generate_gcam2d(attention_map, data=None):
 def generate_guided_bp2d(attention_map):
     assert(len(attention_map.shape) == 2)
     assert (isinstance(attention_map, np.ndarray))  # Not a tensor
-    attention_map -= np.min(attention_map)
-    attention_map /= np.max(attention_map)
+    # attention_map -= np.min(attention_map)
+    # attention_map /= np.max(attention_map)
     attention_map *= 255.0
     attention_map = _resize_attention_map(attention_map, MIN_SHAPE)
     return np.uint8(attention_map)
@@ -65,12 +66,12 @@ def generate_gcam3d(attention_map, data=None):
     return np.uint8(attention_map)
 
 def generate_guided_bp3d(attention_map):
-    assert(len(attention_map.shape) == 2)
+    assert(len(attention_map.shape) == 3)
     assert (isinstance(attention_map, np.ndarray))  # Not a tensor
-    attention_map -= np.min(attention_map)
-    attention_map /= np.max(attention_map)
+    # attention_map -= np.min(attention_map)
+    # attention_map /= np.max(attention_map)
     attention_map *= 255.0
-    attention_map = _resize_attention_map(attention_map, MIN_SHAPE)
+    #attention_map = _resize_attention_map(attention_map, MIN_SHAPE)
     return np.uint8(attention_map)
 
 def _load_data(data_path):

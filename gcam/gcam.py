@@ -16,7 +16,7 @@ from collections import defaultdict
 
 class Gcam():
     def __init__(self, model, output_dir=None, backend="gcam", layer='auto', input_key=None, mask_key=None, postprocessor=None,
-                 retain_graph=False, dim=2, save_scores=False, save_maps=False, save_pickle=False, evaluate=False, metric="ioa", return_score=False, replace_output=False, threshold=0.3):
+                 retain_graph=False, dim=2, save_scores=False, save_maps=False, save_pickle=False, evaluate=False, metric="ioa", return_score=False, threshold=0.3):
         super(Gcam, self).__init__()
         self.__dict__ = model.__dict__.copy()
         # torch.backends.cudnn.enabled = False # TODO: out of memory
@@ -38,12 +38,13 @@ class Gcam():
         self.evaluate = evaluate
         self.metric = metric
         self.return_score = return_score
-        self.replace_output = replace_output
+        self._replace_output = False
         self.threshold = threshold
         self.pickle_maps = []
         self.scores = defaultdict(list)
         self.current_attention_map = None
         self.current_layer = None
+        self.device = next(self.model.parameters()).device
 
         if self.output_dir is None and (self.save_scores is not None or self.save_maps is not None or self.save_pickle is not None):
             raise AttributeError("output_dir needs to be set if save_log, save_maps or save_pickle is set to true")
@@ -56,7 +57,11 @@ class Gcam():
         return self.current_attention_map
 
     def save_attention_map(self, attention_map):
-        save_attention_map(filename=self.output_dir + "/" + self.current_layer + "/attention_map_" + str(self.counter), attention_map=attention_map, backend=self.backend, dim=self.dim)
+        save_attention_map(filename=self.output_dir + "/" + self.current_layer + "/attention_map_" + str(self.counter), attention_map=attention_map, heatmap=self.heatmap, dim=self.dim)
+        self.counter += 1
+
+    def replace_output(self, replace):
+        self._replace_output = replace
 
     def dump(self, show=True):
         if self.save_pickle:
@@ -77,14 +82,14 @@ class Gcam():
             self.model_backend.backward(output=output, label=label)  # TODO: Check if I can remove output
             attention_map = self.model_backend.generate()
             if len(attention_map.keys()) == 1:
-                self.current_attention_map = torch.tensor(attention_map[list(attention_map.keys())[0]][0]).unsqueeze(0).unsqueeze(0).to(self.device)
+                self.current_attention_map = torch.tensor(attention_map[list(attention_map.keys())[0]][0]).unsqueeze(0).unsqueeze(0).to(str(self.device))
                 self.current_layer = list(attention_map.keys())[0]
             scores = self._process_attention_maps(attention_map, batch, mask, batch_size)
-            if self.replace_output:
+            if self._replace_output:
                 if len(attention_map.keys()) == 1:
                     output = self.current_attention_map
                 else:
-                    raise RuntimeError("replace_output is not possible with layer 'full' only with 'auto' or a manually set layer")
+                    raise RuntimeError("Not possible to replace output when layer is 'full', only with 'auto' or a manually set layer")
             if self.return_score:
                 return output, scores
             else:
@@ -138,14 +143,14 @@ class Gcam():
                     #self._log_results(score, layer_name, batch_id, j, batch_size)
                     batch_scores[layer_name].append(score)
                     self.scores[layer_name].append(score)
-                self.counter += 1
         return batch_scores
 
     def _save_attention_map(self, attention_map, layer_output_dir):
         if self.save_pickle:
             self.pickle_maps.append(attention_map)
         if self.save_maps:
-            save_attention_map(filename=layer_output_dir + "/attention_map_" + str(self.counter), attention_map=attention_map, backend=self.backend, dim=self.dim)
+            save_attention_map(filename=layer_output_dir + "/attention_map_" + str(self.counter), attention_map=attention_map, heatmap=self.heatmap, dim=self.dim)
+            self.counter += 1
 
     def _comp_score(self, attention_map, batch, mask):  # TODO: Not multiclass compatible, maybe multiclass parameter in init?
         if self.mask_key is not None:
