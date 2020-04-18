@@ -27,8 +27,8 @@ def create_grad_cam(base):
         Look at Figure 2 on page 4
         """
 
-        def __init__(self, model, target_layers=None, postprocessor=None, retain_graph=False):
-            super(GradCAM, self).__init__(model, postprocessor=postprocessor, retain_graph=retain_graph)
+        def __init__(self, model, target_layers=None, postprocessor=None, retain_graph=False, dim=2):
+            super(GradCAM, self).__init__(model, postprocessor=postprocessor, retain_graph=retain_graph, dim=dim)
             self.fmap_pool = OrderedDict()
             self.grad_pool = OrderedDict()
             self.module_names = {}
@@ -74,7 +74,10 @@ def create_grad_cam(base):
                 raise ValueError("Invalid layer name: {}".format(target_layer))
 
         def _compute_grad_weights(self, grads):
-            return F.adaptive_avg_pool2d(grads, 1)
+            if self.dim == 2:
+                return F.adaptive_avg_pool2d(grads, 1)
+            else:
+                return F.adaptive_avg_pool3d(grads, 1)
 
         def forward(self, data, data_shape):
             self.data_shape = data_shape
@@ -99,8 +102,8 @@ def create_grad_cam(base):
                         if nonzeros == 0 or not isinstance(fmaps, torch.Tensor) or not isinstance(grads, torch.Tensor):
                             counter += 1
                             continue
-                        #print("Dismissed the last {} module layers (Note: This number can be inflated if the model contains many nested module layers)".format(counter))
-                        #print("Selected module layer: {}".format(layer))
+                        print("Dismissed the last {} module layers (Note: This number can be inflated if the model contains many nested module layers)".format(counter))
+                        print("Selected module layer: {}".format(layer))
                         fmap_list.append(self._find(self.fmap_pool, layer)[i])
                         grads = self._find(self.grad_pool, layer)[i]
                         weight_list.append(self._compute_grad_weights(grads))
@@ -125,7 +128,7 @@ def create_grad_cam(base):
                 attention_maps = []
                 for i in range(self.logits.shape[0]):
                     attention_map = self._generate_helper(fmaps[i].unsqueeze(0), weights[i].unsqueeze(0))
-                    attention_map = attention_map.squeeze().cpu().numpy()
+                    attention_map = attention_map.squeeze()#.cpu().numpy()
                     attention_maps.append(attention_map)
                 attention_maps = {layer: attention_maps}
             else:
@@ -143,8 +146,8 @@ def create_grad_cam(base):
             gcam_tensor = self._generate_helper(fmaps, weights)
             attention_maps = []
             for i in range(self.logits.shape[0]):
-                attention_map = gcam_tensor[i].unsqueeze(0)
-                attention_map = attention_map.squeeze().cpu().numpy()
+                attention_map = gcam_tensor[i]#.unsqueeze(0)
+                attention_map = attention_map.squeeze()#.cpu().numpy()
                 attention_maps.append(attention_map)
             return attention_maps
 

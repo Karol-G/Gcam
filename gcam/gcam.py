@@ -16,7 +16,7 @@ from collections import defaultdict
 
 class Gcam():
     def __init__(self, model, output_dir=None, backend="gcam", layer='auto', input_key=None, mask_key=None, postprocessor=None,
-                 retain_graph=False, dim=2, save_scores=False, save_maps=False, save_pickle=False, evaluate=False, metric="ioa", return_score=False, threshold=0.3):
+                 retain_graph=False, dim=2, save_scores=False, save_maps=False, save_pickle=False, evaluate=False, metric="ioa", return_score=False, replace_output=False, threshold=0.3):
         super(Gcam, self).__init__()
         super(Gcam, self).__init__()
         self.__dict__ = model.__dict__.copy()
@@ -29,7 +29,7 @@ class Gcam():
         self.mask_key = mask_key
         self.model = model
         self.model.eval()
-        self.model_backend, self.heatmap = self._assign_backend(backend, self.model, self.layer, postprocessor, retain_graph)
+        self.model_backend, self.heatmap = self._assign_backend(backend, self.model, self.layer, postprocessor, retain_graph, self.dim)
         self.backend = backend
         self.counter = 0
         self.dim = dim
@@ -39,25 +39,33 @@ class Gcam():
         self.evaluate = evaluate
         self.metric = metric
         self.return_score = return_score
+        self.replace_output = replace_output
         self.threshold = threshold
         self.pickle_maps = []
         self.scores = defaultdict(list)
+        self.current_attention_map = None
+        self.current_layer = None
 
         if self.output_dir is None and (self.save_scores is not None or self.save_maps is not None or self.save_pickle is not None):
             raise AttributeError("output_dir needs to be set if save_log, save_maps or save_pickle is set to true")
         # print("--------------------SUPER TEST")
 
-    def _assign_backend(self, backend, model, target_layers, postprocessor, retain_graph):
-        if backend == "gbp":
-            return create_guided_back_propagation(object)(model=model, postprocessor=postprocessor, retain_graph=retain_graph), False
-        elif backend == "gcam":
-            return create_grad_cam(object)(model=model, target_layers=target_layers, postprocessor=postprocessor, retain_graph=retain_graph), True
-        elif backend == "ggcam":
-            return create_guided_grad_cam(object)(model=model, target_layers=target_layers, postprocessor=postprocessor, retain_graph=retain_graph), False
-        elif backend == "gcampp":
-            return create_grad_cam_pp(object)(model=model, target_layers=target_layers, postprocessor=postprocessor, retain_graph=retain_graph), True
-        else:
-            raise TypeError("Backend does not exist")
+    def get_layers(self, reverse=False):
+        return self.model_backend.layers(reverse)
+
+    def get_attention_map(self):
+        return self.current_attention_map
+
+    def save_attention_map(self, attention_map):
+        save_attention_map(filename=self.output_dir + "/" + self.current_layer + "/attention_map_" + str(self.counter), attention_map=attention_map, backend=self.backend, dim=self.dim)
+
+    def dump(self, show=True):
+        if self.save_pickle:
+            with open(self.output_dir + '/attention_maps.pkl', 'wb') as handle:  # TODO: Save every 1GB
+                pickle.dump(self.pickle_maps, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        mean_scores = self._comp_mean_score(show)
+        if self.save_scores:
+            self._scores2csv(mean_scores)
 
     def __call__(self, batch, label=None, mask=None):
         return self.forward(batch, label, mask)
@@ -69,7 +77,15 @@ class Gcam():
             output = self.model_backend.forward(batch, data_shape)
             self.model_backend.backward(output=output, label=label)  # TODO: Check if I can remove output
             attention_map = self.model_backend.generate()
+            if len(attention_map.keys()) == 1:
+                self.current_attention_map = torch.tensor(attention_map[list(attention_map.keys())[0]][0]).unsqueeze(0).unsqueeze(0).cuda()
+                self.current_layer = list(attention_map.keys())[0]
             scores = self._process_attention_maps(attention_map, batch, mask, batch_size)
+            if self.replace_output:
+                if len(attention_map.keys()) == 1:
+                    output = self.current_attention_map
+                else:
+                    raise RuntimeError("replace_output is not possible with layer 'full' only with 'auto' or a manually set layer")
             if self.return_score:
                 return output, scores
             else:
@@ -84,6 +100,18 @@ class Gcam():
     # TODO: Save list if memory size is 1GB
     # TODO: https://stackoverflow.com/questions/20771470/list-memory-usage
 
+    def _assign_backend(self, backend, model, target_layers, postprocessor, retain_graph, dim):
+        if backend == "gbp":
+            return create_guided_back_propagation(object)(model=model, postprocessor=postprocessor, retain_graph=retain_graph, dim=dim), False
+        elif backend == "gcam":
+            return create_grad_cam(object)(model=model, target_layers=target_layers, postprocessor=postprocessor, retain_graph=retain_graph, dim=dim), True
+        elif backend == "ggcam":
+            return create_guided_grad_cam(object)(model=model, target_layers=target_layers, postprocessor=postprocessor, retain_graph=retain_graph, dim=dim), False
+        elif backend == "gcampp":
+            return create_grad_cam_pp(object)(model=model, target_layers=target_layers, postprocessor=postprocessor, retain_graph=retain_graph, dim=dim), True
+        else:
+            raise TypeError("Backend does not exist")
+
     def _unpack_batch(self, batch):
         if self.input_key is None:
             data_shape = batch.shape[-self.dim:]
@@ -97,7 +125,7 @@ class Gcam():
         batch_scores = defaultdict(list) if self.evaluate else None
         for layer_name in attention_map.keys():
             layer_output_dir = None
-            if self.output_dir is not None and self.save_maps:
+            if self.output_dir is not None:
                 if layer_name == "":
                     layer_output_dir = self.output_dir
                 else:
@@ -118,7 +146,7 @@ class Gcam():
         if self.save_pickle:
             self.pickle_maps.append(attention_map)
         if self.save_maps:
-            save_attention_map(filename=layer_output_dir + "/attention_map_" + str(self.counter) + ".png", attention_map=attention_map, backend=self.backend, dim=self.dim)
+            save_attention_map(filename=layer_output_dir + "/attention_map_" + str(self.counter), attention_map=attention_map, backend=self.backend, dim=self.dim)
 
     def _comp_score(self, attention_map, batch, mask):  # TODO: Not multiclass compatible, maybe multiclass parameter in init?
         if self.mask_key is not None:
@@ -145,14 +173,6 @@ class Gcam():
             score = self.metric(attention_map, mask, attention_map, weights)
         return score
 
-    def dump(self, show=True):
-        if self.save_pickle:
-            with open(self.output_dir + '/attention_maps.pkl', 'wb') as handle:  # TODO: Save every 1GB
-                pickle.dump(self.pickle_maps, handle, protocol=pickle.HIGHEST_PROTOCOL)
-        mean_scores = self._comp_mean_score(show)
-        if self.save_scores:
-            self._scores2csv(mean_scores)
-
     def _comp_mean_score(self, show):
         mean_scores = defaultdict(float)
         for layer_name in self.scores.keys():
@@ -171,10 +191,6 @@ class Gcam():
         df = df.append(new_entry)
         df.insert(0, "Layer", score_ids, True)
         df.to_csv(self.output_dir + "/scores.csv", index=False)
-
-    def get_layers(self, reverse=False):
-        return self.model_backend.layers(reverse)
-
 
     def __getattr__(self, method):
         def abstract_method(*args, **kwargs):

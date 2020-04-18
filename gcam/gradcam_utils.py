@@ -1,12 +1,13 @@
 import cv2
 import numpy as np
 import matplotlib.cm as cm
+import nibabel as nib
 
 MIN_SHAPE = (500, 500)
 
 def save_attention_map(filename, attention_map, backend, dim, data=None):
     attention_map = generate_attention_map(attention_map, backend, dim, data)
-    cv2.imwrite(filename, attention_map)
+    _save_attention_map(filename, attention_map, dim)
 
 def generate_attention_map(attention_map, heatmap, dim, data=None):
     if dim == 2:
@@ -48,7 +49,7 @@ def generate_guided_bp2d(attention_map):
     return np.uint8(attention_map)
 
 def generate_gcam3d(attention_map, data=None):
-    assert(len(attention_map.shape) == 3)  # No batch dim
+    #assert(len(attention_map.shape) == 3)  # No batch dim
     assert(isinstance(attention_map, np.ndarray))  # Not a tensor
     assert(isinstance(data, np.ndarray) or data is None)  # Not PIL
     assert(data is None or len(data.shape) == 3)
@@ -58,8 +59,9 @@ def generate_gcam3d(attention_map, data=None):
         cmap = cm.jet_r(attention_map)[..., :3] * 255.0  # TODO: Still bugged with batch dim
         attention_map = (cmap.astype(np.float) + data.astype(np.float)) / 2  # TODO: Still bugged with batch dim
     else:
-        attention_map = _resize_attention_map(attention_map, MIN_SHAPE)
-        attention_map = cm.jet_r(attention_map)[..., :3] * 255.0  # TODO: Still bugged with batch dim
+        # attention_map = _resize_attention_map(attention_map, MIN_SHAPE)
+        #attention_map = cm.jet_r(attention_map)[..., :3] * 255.0  # TODO: Still bugged with batch dim
+        attention_map *= 255.0
     return np.uint8(attention_map)
 
 def generate_guided_bp3d(attention_map):
@@ -89,3 +91,14 @@ def _resize_attention_map(attention_map, min_shape):
 
 def normalize(x):
     return (x-np.min(x))/(np.max(x)-np.min(x))
+
+def _save_attention_map(filename, attention_map, dim):
+    if dim == 2:
+        cv2.imwrite(filename + ".png", attention_map)
+    else:
+        #attention_map = attention_map.astype(np.int16)
+        # attention_map = attention_map.transpose(1, 2, 0, 3)
+        attention_map = attention_map.transpose(1, 2, 0)
+        attention_map = nib.Nifti1Image(attention_map, affine=np.eye(4))
+        nib.save(attention_map, filename + ".nii.gz")
+

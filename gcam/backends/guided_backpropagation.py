@@ -11,8 +11,8 @@ def create_guided_back_propagation(base):
         Look at Figure 1 on page 8.
         """
 
-        def __init__(self, model, postprocessor=None, retain_graph=False):
-            super(GuidedBackPropagation, self).__init__(model, postprocessor=postprocessor, retain_graph=retain_graph)
+        def __init__(self, model, postprocessor=None, retain_graph=False, dim=2):
+            super(GuidedBackPropagation, self).__init__(model, postprocessor=postprocessor, retain_graph=retain_graph, dim=dim)
 
             def backward_hook(module, grad_in, grad_out):
                 # Cut off negative gradients
@@ -29,8 +29,9 @@ def create_guided_back_propagation(base):
         def generate(self):
             attention_map = self.data.grad.clone()
             self.data.grad.zero_()
-            attention_map = attention_map.cpu().numpy().transpose(0, 2, 3, 1)
-            attention_map = np.mean(attention_map, axis=3)
+            #attention_map = attention_map.cpu().numpy().transpose(0, 2, 3, 1)
+            #attention_map = np.mean(attention_map, axis=3)
+            attention_map = torch.mean(attention_map, dim=1)
             attention_maps = {}
             attention_maps[""] = attention_map
             return attention_maps

@@ -11,8 +11,8 @@ def create_grad_cam_pp(base):
         Look at Figure 2 on page 4
         """
 
-        def __init__(self, model, target_layers=None, postprocessor=None, retain_graph=False):
-            super(GradCamPP, self).__init__(model, target_layers=target_layers, postprocessor=postprocessor, retain_graph=retain_graph)
+        def __init__(self, model, target_layers=None, postprocessor=None, retain_graph=False, dim=2):
+            super(GradCamPP, self).__init__(model, target_layers=target_layers, postprocessor=postprocessor, retain_graph=retain_graph, dim=dim)
 
         def _select_highest_layer(self):
             # TODO: Does not always select highest layer
@@ -63,7 +63,7 @@ def create_grad_cam_pp(base):
                 attention_maps = []
                 for i in range(self.logits.shape[0]):
                     attention_map = self._generate_helper(fmaps[i].unsqueeze(0), grads[i].unsqueeze(0))
-                    attention_map = attention_map.squeeze().cpu().numpy()
+                    attention_map = attention_map.squeeze()#.cpu().numpy()
                     attention_maps.append(attention_map)
                 attention_maps = {layer: attention_maps}
             else:
@@ -81,8 +81,8 @@ def create_grad_cam_pp(base):
             gcam_tensor = self._generate_helper(fmaps, grads)
             attention_maps = []
             for i in range(self.logits.shape[0]):
-                attention_map = gcam_tensor[i].unsqueeze(0)
-                attention_map = attention_map.squeeze().cpu().numpy()
+                attention_map = gcam_tensor[i]#.unsqueeze(0)
+                attention_map = attention_map.squeeze()#.cpu().numpy()
                 attention_maps.append(attention_map)
             return attention_maps
 

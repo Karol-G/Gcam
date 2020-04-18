@@ -5,9 +5,9 @@ from gcam.backends.guided_backpropagation import create_guided_back_propagation
 
 def create_guided_grad_cam(base):
     class GuidedGradCam(base):
-        def __init__(self, model, target_layers=None, postprocessor=None, retain_graph=False):
-            self.model_GCAM = create_grad_cam(base)(model=model, target_layers=target_layers, postprocessor=postprocessor, retain_graph=retain_graph)
-            self.model_GBP = create_guided_back_propagation(base)(model=model, postprocessor=postprocessor, retain_graph=retain_graph)
+        def __init__(self, model, target_layers=None, postprocessor=None, retain_graph=False, dim=2):
+            self.model_GCAM = create_grad_cam(base)(model=model, target_layers=target_layers, postprocessor=postprocessor, retain_graph=retain_graph, dim=dim)
+            self.model_GBP = create_guided_back_propagation(base)(model=model, postprocessor=postprocessor, retain_graph=retain_graph, dim=dim)
 
         def forward(self, data, data_shape):
             self.output_GCAM = self.model_GCAM.forward(data.clone(), data_shape)
@@ -26,7 +26,7 @@ def create_guided_grad_cam(base):
                     if attention_map_GBP[i].shape == attention_map_GCAM[layer_name][i].shape:
                         attention_map_GCAM[layer_name][i] = np.multiply(attention_map_GCAM[layer_name][i], attention_map_GBP[i])
                     else:
-                        attention_map_GCAM_tmp = cv2.resize(attention_map_GCAM[layer_name][i], tuple(np.flip(attention_map_GBP[i].shape)))
+                        attention_map_GCAM_tmp = cv2.resize(attention_map_GCAM[layer_name][i], tuple(np.flip(attention_map_GBP[i].shape)))  # TODO: Not compatible with 3D
                         attention_map_GCAM[layer_name][i] = np.multiply(attention_map_GCAM_tmp, attention_map_GBP[i])
             # # del self.output_GCAM
             # # del self.output_GBP
