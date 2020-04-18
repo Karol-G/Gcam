@@ -28,7 +28,7 @@ def create_grad_cam(base):
         """
 
         def __init__(self, model, target_layers=None, postprocessor=None, retain_graph=False, dim=2):
-            super(GradCAM, self).__init__(model, postprocessor=postprocessor, retain_graph=retain_graph, dim=dim)
+            super(GradCAM, self).__init__(model, postprocessor=postprocessor, retain_graph=retain_graph)
             self.fmap_pool = OrderedDict()
             self.grad_pool = OrderedDict()
             self.module_names = {}
@@ -39,6 +39,7 @@ def create_grad_cam(base):
                 target_layers = [target_layers]
             self.target_layers = target_layers  # list
             self.registered_hooks = {}
+            self.dim = dim
 
             def forward_hook(key):
                 def forward_hook_(module, input, output):
@@ -128,7 +129,7 @@ def create_grad_cam(base):
                 attention_maps = []
                 for i in range(self.logits.shape[0]):
                     attention_map = self._generate_helper(fmaps[i].unsqueeze(0), weights[i].unsqueeze(0))
-                    attention_map = attention_map.squeeze()#.cpu().numpy()
+                    attention_map = attention_map.squeeze().cpu().numpy()
                     attention_maps.append(attention_map)
                 attention_maps = {layer: attention_maps}
             else:
@@ -147,7 +148,7 @@ def create_grad_cam(base):
             attention_maps = []
             for i in range(self.logits.shape[0]):
                 attention_map = gcam_tensor[i]#.unsqueeze(0)
-                attention_map = attention_map.squeeze()#.cpu().numpy()
+                attention_map = attention_map.squeeze().cpu().numpy()
                 attention_maps.append(attention_map)
             return attention_maps
 

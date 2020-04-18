@@ -18,7 +18,6 @@ class Gcam():
     def __init__(self, model, output_dir=None, backend="gcam", layer='auto', input_key=None, mask_key=None, postprocessor=None,
                  retain_graph=False, dim=2, save_scores=False, save_maps=False, save_pickle=False, evaluate=False, metric="ioa", return_score=False, replace_output=False, threshold=0.3):
         super(Gcam, self).__init__()
-        super(Gcam, self).__init__()
         self.__dict__ = model.__dict__.copy()
         # torch.backends.cudnn.enabled = False # TODO: out of memory
         if output_dir is not None:
@@ -29,7 +28,7 @@ class Gcam():
         self.mask_key = mask_key
         self.model = model
         self.model.eval()
-        self.model_backend, self.heatmap = self._assign_backend(backend, self.model, self.layer, postprocessor, retain_graph, self.dim)
+        self.model_backend, self.heatmap = self._assign_backend(backend, self.model, self.layer, postprocessor, retain_graph, dim)
         self.backend = backend
         self.counter = 0
         self.dim = dim
@@ -78,7 +77,7 @@ class Gcam():
             self.model_backend.backward(output=output, label=label)  # TODO: Check if I can remove output
             attention_map = self.model_backend.generate()
             if len(attention_map.keys()) == 1:
-                self.current_attention_map = torch.tensor(attention_map[list(attention_map.keys())[0]][0]).unsqueeze(0).unsqueeze(0).cuda()
+                self.current_attention_map = torch.tensor(attention_map[list(attention_map.keys())[0]][0]).unsqueeze(0).unsqueeze(0).to(self.device)
                 self.current_layer = list(attention_map.keys())[0]
             scores = self._process_attention_maps(attention_map, batch, mask, batch_size)
             if self.replace_output:

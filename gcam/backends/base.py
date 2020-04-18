@@ -8,14 +8,13 @@ def create_base_wrapper(base):
         Please modify forward() and backward() according to your task.
         """
 
-        def __init__(self, model, postprocessor=None, retain_graph=False, dim=2):
+        def __init__(self, model, postprocessor=None, retain_graph=False):
             super(_BaseWrapper, self).__init__()
             self.device = next(model.parameters()).device
             self.retain_graph = retain_graph
             self.model = model
             self.handlers = []  # a set of hook function handlers
             self.postprocessor = postprocessor
-            self.dim = dim
 
         def _encode_one_hot(self, ids):
             one_hot = torch.zeros_like(self.logits).to(self.device)
