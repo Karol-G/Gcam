@@ -82,7 +82,9 @@ class Gcam():
             self.model_backend.backward(output=output, label=label)  # TODO: Check if I can remove output
             attention_map = self.model_backend.generate()
             if len(attention_map.keys()) == 1:
-                self.current_attention_map = torch.tensor(attention_map[list(attention_map.keys())[0]][0]).unsqueeze(0).unsqueeze(0).to(str(self.device))
+                self.current_attention_map = attention_map[list(attention_map.keys())[0]][0]
+                self.current_attention_map = normalize(self.current_attention_map)*255.0
+                self.current_attention_map = torch.tensor(self.current_attention_map).unsqueeze(0).unsqueeze(0).to(str(self.device))
                 self.current_layer = list(attention_map.keys())[0]
             scores = self._process_attention_maps(attention_map, batch, mask, batch_size)
             if self._replace_output:
@@ -196,7 +198,7 @@ class Gcam():
         df.insert(0, "Layer", score_ids, True)
         df.to_csv(self.output_dir + "/scores.csv", index=False)
 
-    def __getattr__(self, method):
+    def __getattr__(self, method): # TODO: Buggy. Calls itself???
         def abstract_method(*args, **kwargs):
             # print("-------------------------- ABSTRACT METHOD GCAM HOOK (" + method + ") --------------------------")
             if args == () and kwargs == {}:
