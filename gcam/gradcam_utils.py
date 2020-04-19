@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 import matplotlib.cm as cm
 import nibabel as nib
+import torch
 
 MIN_SHAPE = (500, 500)
 
@@ -91,7 +92,11 @@ def _resize_attention_map(attention_map, min_shape):
     return attention_map
 
 def normalize(x):
-    return (x-np.min(x))/(np.max(x)-np.min(x))
+    if isinstance(x, torch.Tensor):
+        return (x-torch.min(x))/(torch.max(x)-torch.min(x))
+    else:
+        return (x - np.min(x)) / (np.max(x) - np.min(x))
+
 
 def _save_attention_map(filename, attention_map, dim):
     if dim == 2:
