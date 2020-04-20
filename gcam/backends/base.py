@@ -51,8 +51,10 @@ class _BaseWrapper(nn.Module):
             output = torch.sigmoid(output)
         elif postprocessor == "softmax":
             output = F.softmax(output, dim=1)
-        else:
+        elif callable(postprocessor):
             output = postprocessor(output)
+        else:
+            raise AttributeError("Postprocessor does not exist")
         return output
 
     def _mask_output(self, output, label):

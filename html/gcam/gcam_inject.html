@@ -1,0 +1,438 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
+<meta name="generator" content="pdoc 0.8.1" />
+<title>gcam.gcam_inject API documentation</title>
+<meta name="description" content="" />
+<link href='https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.0/normalize.min.css' rel='stylesheet'>
+<link href='https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/8.0.0/sanitize.min.css' rel='stylesheet'>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/github.min.css" rel="stylesheet">
+<style>.flex{display:flex !important}body{line-height:1.5em}#content{padding:20px}#sidebar{padding:30px;overflow:hidden}#sidebar > *:last-child{margin-bottom:2cm}.http-server-breadcrumbs{font-size:130%;margin:0 0 15px 0}#footer{font-size:.75em;padding:5px 30px;border-top:1px solid #ddd;text-align:right}#footer p{margin:0 0 0 1em;display:inline-block}#footer p:last-child{margin-right:30px}h1,h2,h3,h4,h5{font-weight:300}h1{font-size:2.5em;line-height:1.1em}h2{font-size:1.75em;margin:1em 0 .50em 0}h3{font-size:1.4em;margin:25px 0 10px 0}h4{margin:0;font-size:105%}a{color:#058;text-decoration:none;transition:color .3s ease-in-out}a:hover{color:#e82}.title code{font-weight:bold}h2[id^="header-"]{margin-top:2em}.ident{color:#900}pre code{background:#f8f8f8;font-size:.8em;line-height:1.4em}code{background:#f2f2f1;padding:1px 4px;overflow-wrap:break-word}h1 code{background:transparent}pre{background:#f8f8f8;border:0;border-top:1px solid #ccc;border-bottom:1px solid #ccc;margin:1em 0;padding:1ex}#http-server-module-list{display:flex;flex-flow:column}#http-server-module-list div{display:flex}#http-server-module-list dt{min-width:10%}#http-server-module-list p{margin-top:0}.toc ul,#index{list-style-type:none;margin:0;padding:0}#index code{background:transparent}#index h3{border-bottom:1px solid #ddd}#index ul{padding:0}#index h4{margin-top:.6em;font-weight:bold}@media (min-width:200ex){#index .two-column{column-count:2}}@media (min-width:300ex){#index .two-column{column-count:3}}dl{margin-bottom:2em}dl dl:last-child{margin-bottom:4em}dd{margin:0 0 1em 3em}#header-classes + dl > dd{margin-bottom:3em}dd dd{margin-left:2em}dd p{margin:10px 0}.name{background:#eee;font-weight:bold;font-size:.85em;padding:5px 10px;display:inline-block;min-width:40%}.name:hover{background:#e0e0e0}.name > span:first-child{white-space:nowrap}.name.class > span:nth-child(2){margin-left:.4em}.inherited{color:#999;border-left:5px solid #eee;padding-left:1em}.inheritance em{font-style:normal;font-weight:bold}.desc h2{font-weight:400;font-size:1.25em}.desc h3{font-size:1em}.desc dt code{background:inherit}.source summary,.git-link-div{color:#666;text-align:right;font-weight:400;font-size:.8em;text-transform:uppercase}.source summary > *{white-space:nowrap;cursor:pointer}.git-link{color:inherit;margin-left:1em}.source pre{max-height:500px;overflow:auto;margin:0}.source pre code{font-size:12px;overflow:visible}.hlist{list-style:none}.hlist li{display:inline}.hlist li:after{content:',\2002'}.hlist li:last-child:after{content:none}.hlist .hlist{display:inline;padding-left:1em}img{max-width:100%}.admonition{padding:.1em .5em;margin-bottom:1em}.admonition-title{font-weight:bold}.admonition.note,.admonition.info,.admonition.important{background:#aef}.admonition.todo,.admonition.versionadded,.admonition.tip,.admonition.hint{background:#dfd}.admonition.warning,.admonition.versionchanged,.admonition.deprecated{background:#fd4}.admonition.error,.admonition.danger,.admonition.caution{background:lightpink}</style>
+<style media="screen and (min-width: 700px)">@media screen and (min-width:700px){#sidebar{width:30%;height:100vh;overflow:auto;position:sticky;top:0}#content{width:70%;max-width:100ch;padding:3em 4em;border-left:1px solid #ddd}pre code{font-size:1em}.item .name{font-size:1em}main{display:flex;flex-direction:row-reverse;justify-content:flex-end}.toc ul ul,#index ul{padding-left:1.5em}.toc > ul > li{margin-top:.5em}}</style>
+<style media="print">@media print{#sidebar h1{page-break-before:always}.source{display:none}}@media print{*{background:transparent !important;color:#000 !important;box-shadow:none !important;text-shadow:none !important}a[href]:after{content:" (" attr(href) ")";font-size:90%}a[href][title]:after{content:none}abbr[title]:after{content:" (" attr(title) ")"}.ir a:after,a[href^="javascript:"]:after,a[href^="#"]:after{content:""}pre,blockquote{border:1px solid #999;page-break-inside:avoid}thead{display:table-header-group}tr,img{page-break-inside:avoid}img{max-width:100% !important}@page{margin:0.5cm}p,h2,h3{orphans:3;widows:3}h1,h2,h3,h4,h5,h6{page-break-after:avoid}}</style>
+</head>
+<body>
+<main>
+<article id="content">
+<header>
+<h1 class="title">Module <code>gcam.gcam_inject</code></h1>
+</header>
+<section id="section-intro">
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">import torch
+from pathlib import Path
+import types
+import pickle
+import pandas as pd
+from gcam import gcam_utils
+from gcam.backends.guided_backpropagation import GuidedBackPropagation
+from gcam.backends.grad_cam import GradCAM
+from gcam.backends.guided_grad_cam import GuidedGradCam
+from gcam.backends.grad_cam_pp import GradCamPP
+from gcam import score_utils
+from collections import defaultdict
+import copy
+import numpy as np
+
+# TODO: Set requirements in setup.py
+
+def inject(model, output_dir=None, backend=&#34;gcam&#34;, layer=&#39;auto&#39;, input_key=None, mask_key=None, postprocessor=None,
+           retain_graph=False, dim=2, save_scores=False, save_maps=False, save_pickle=False, evaluate=False, metric=&#34;wioa&#34;,
+           return_score=False, threshold=0.3, registered_only=False):
+    # torch.backends.cudnn.enabled = False # TODO: out of memory
+    if output_dir is not None:
+        Path(output_dir).mkdir(parents=True, exist_ok=True)
+
+    model.eval()
+    model_backend = copy.deepcopy(model)
+    model_backend, heatmap = _assign_backend(backend, model_backend, layer, postprocessor, retain_graph, dim, registered_only)
+
+    # Save every attribute in a dict which is added to the model attributes
+    # It is ugly but it avoids name conflicts
+    gcam_dict = {}
+
+    gcam_dict[&#39;output_dir&#39;] = output_dir
+    gcam_dict[&#39;layer&#39;] = layer
+    gcam_dict[&#39;input_key&#39;] = input_key
+    gcam_dict[&#39;mask_key&#39;] = mask_key
+    gcam_dict[&#39;model_backend&#39;] = model_backend
+    gcam_dict[&#39;heatmap&#39;] = heatmap
+    gcam_dict[&#39;counter&#39;] = 0
+    gcam_dict[&#39;dim&#39;] = dim
+    gcam_dict[&#39;save_scores&#39;] = save_scores
+    gcam_dict[&#39;save_maps&#39;] = save_maps
+    gcam_dict[&#39;save_pickle&#39;] = save_pickle
+    gcam_dict[&#39;evaluate&#39;] = evaluate
+    gcam_dict[&#39;metric&#39;] = metric
+    gcam_dict[&#39;return_score&#39;] = return_score
+    gcam_dict[&#39;_replace_output&#39;] = False
+    gcam_dict[&#39;threshold&#39;] = threshold
+    gcam_dict[&#39;pickle_maps&#39;] = []
+    gcam_dict[&#39;scores&#39;] = defaultdict(list)
+    gcam_dict[&#39;current_attention_map&#39;] = None
+    gcam_dict[&#39;current_layer&#39;] = None
+    gcam_dict[&#39;device&#39;] = next(model.parameters()).device
+    setattr(model, &#39;gcam_dict&#39;, gcam_dict)
+
+    if output_dir is None and (save_scores is not None or save_maps is not None or save_pickle is not None):
+        raise AttributeError(&#34;output_dir needs to be set if save_scores, save_maps or save_pickle is set to true&#34;)
+
+    model.get_layers = types.MethodType(get_layers, model)
+    model.get_attention_map = types.MethodType(get_attention_map, model)
+    model.save_attention_map = types.MethodType(save_attention_map, model)
+    model.replace_output = types.MethodType(replace_output, model)
+    model.dump = types.MethodType(dump, model)
+    model.forward = types.MethodType(forward, model)
+
+    model._assign_backend = types.MethodType(_assign_backend, model)
+    model._unpack_batch = types.MethodType(_unpack_batch, model)
+    model._process_attention_maps = types.MethodType(_process_attention_maps, model)
+    model._save_file = types.MethodType(_save_attention_map, model)
+    model._comp_score = types.MethodType(_comp_score, model)
+    model._comp_mean_score = types.MethodType(_comp_mean_score, model)
+    model._scores2csv = types.MethodType(_scores2csv, model)
+
+
+def get_layers(self, reverse=False):
+    return self.gcam_dict[&#39;model_backend&#39;].layers(reverse)
+
+def get_attention_map(self):
+    return self.gcam_dict[&#39;current_attention_map&#39;]
+
+def save_attention_map(self, attention_map):
+    gcam_utils.save_attention_map(filename=self.gcam_dict[&#39;output_dir&#39;] + &#34;/&#34; + self.gcam_dict[&#39;current_layer&#39;] + &#34;/attention_map_&#34; +
+                                           str(self.gcam_dict[&#39;counter&#39;]), attention_map=attention_map, heatmap=self.gcam_dict[&#39;heatmap&#39;], dim=self.gcam_dict[&#39;dim&#39;])
+    self.gcam_dict[&#39;counter&#39;] += 1
+
+def replace_output(self, replace):
+    self.gcam_dict[&#39;_replace_output&#39;] = replace
+
+def dump(self, show=True):
+    if self.gcam_dict[&#39;save_pickle&#39;]:
+        with open(self.gcam_dict[&#39;output_dir&#39;] + &#39;/attention_maps.pkl&#39;, &#39;wb&#39;) as handle:  # TODO: Save every 1GB
+            pickle.dump(self.gcam_dict[&#39;pickle_maps&#39;], handle, protocol=pickle.HIGHEST_PROTOCOL)
+    mean_scores = self._comp_mean_score(show)
+    if self.gcam_dict[&#39;save_scores&#39;]:
+        self._scores2csv(mean_scores)
+
+def forward(self, batch, label=None, mask=None):
+    # print(&#34;-------------------------- FORWARD GCAM HOOK --------------------------&#34;)
+    self.gcam_dict[&#39;model_backend&#39;].model.eval()
+    with torch.enable_grad():
+        batch_size, data_shape = self._unpack_batch(batch)
+        output = self.gcam_dict[&#39;model_backend&#39;].forward(batch, data_shape)
+        self.gcam_dict[&#39;model_backend&#39;].backward(output=output, label=label)  # TODO: Check if I can remove output
+        attention_map = self.gcam_dict[&#39;model_backend&#39;].generate()
+        if len(attention_map.keys()) == 1:
+            self.gcam_dict[&#39;current_attention_map&#39;] = attention_map[list(attention_map.keys())[0]][0]
+            #self.gcam_dict[&#39;current_attention_map&#39;] = gradcam_utils.normalize(self.gcam_dict[&#39;current_attention_map&#39;])*255.0
+            #self.gcam_dict[&#39;current_attention_map&#39;] = torch.tensor(self.gcam_dict[&#39;current_attention_map&#39;]).unsqueeze(0).unsqueeze(0).to(str(self.gcam_dict[&#39;device&#39;]))
+            self.gcam_dict[&#39;current_layer&#39;] = list(attention_map.keys())[0]
+        scores = self._process_attention_maps(attention_map, batch, mask, batch_size)
+        if self.gcam_dict[&#39;_replace_output&#39;]:
+            if len(attention_map.keys()) == 1:
+                output = torch.tensor(self.gcam_dict[&#39;current_attention_map&#39;]).unsqueeze(0).unsqueeze(0).to(str(self.gcam_dict[&#39;device&#39;]))
+            else:
+                raise RuntimeError(&#34;Not possible to replace output when layer is &#39;full&#39;, only with &#39;auto&#39; or a manually set layer&#34;)
+        if self.gcam_dict[&#39;return_score&#39;]:
+            return output, scores
+        else:
+            #output = gradcam_utils.normalize(output) * 255.0
+            return output
+
+def _assign_backend(backend, model, target_layers, postprocessor, retain_graph, dim, registered_only):
+    if backend == &#34;gbp&#34;:
+        return GuidedBackPropagation(model=model, postprocessor=postprocessor, retain_graph=retain_graph, dim=dim), False
+    elif backend == &#34;gcam&#34;:
+        return GradCAM(model=model, target_layers=target_layers, postprocessor=postprocessor, retain_graph=retain_graph, dim=dim, registered_only=registered_only), True
+    elif backend == &#34;ggcam&#34;:
+        return GuidedGradCam(model=model, target_layers=target_layers, postprocessor=postprocessor, retain_graph=retain_graph, dim=dim), False
+    elif backend == &#34;gcampp&#34;:
+        return GradCamPP(model=model, target_layers=target_layers, postprocessor=postprocessor, retain_graph=retain_graph, dim=dim), True
+    else:
+        raise TypeError(&#34;Backend does not exist&#34;)
+
+def _unpack_batch(self, batch):
+    if self.gcam_dict[&#39;input_key&#39;] is None:
+        data_shape = batch.shape[-self.gcam_dict[&#39;dim&#39;]:]
+        batch_size = batch.shape[0]
+    else:
+        data_shape = batch[self.gcam_dict[&#39;input_key&#39;]].shape[-self.gcam_dict[&#39;dim&#39;]:]
+        batch_size = batch[self.gcam_dict[&#39;input_key&#39;]].shape[0]
+    return batch_size, data_shape
+
+def _process_attention_maps(self, attention_map, batch, mask, batch_size):
+    batch_scores = defaultdict(list) if self.gcam_dict[&#39;evaluate&#39;] else None
+    for layer_name in attention_map.keys():
+        layer_output_dir = None
+        if self.gcam_dict[&#39;output_dir&#39;] is not None:
+            if layer_name == &#34;&#34;:
+                layer_output_dir = self.gcam_dict[&#39;output_dir&#39;]
+            else:
+                layer_output_dir = self.gcam_dict[&#39;output_dir&#39;] + &#34;/&#34; + layer_name
+            Path(layer_output_dir).mkdir(parents=True, exist_ok=True)
+        for j in range(batch_size):
+            attention_map_j = attention_map[layer_name][j]
+            self._save_file(attention_map_j, layer_output_dir)
+            if self.gcam_dict[&#39;evaluate&#39;]:
+                score = self._comp_score(attention_map_j, batch, mask[j].squeeze())
+                batch_scores[layer_name].append(score)
+                self.gcam_dict[&#39;scores&#39;][layer_name].append(score)
+    return batch_scores
+
+def _save_attention_map(self, attention_map, layer_output_dir):
+    if self.gcam_dict[&#39;save_pickle&#39;]:
+        self.gcam_dict[&#39;pickle_maps&#39;].append(attention_map)
+    if self.gcam_dict[&#39;save_maps&#39;]:
+        gcam_utils.save_attention_map(filename=layer_output_dir + &#34;/attention_map_&#34; + str(self.gcam_dict[&#39;counter&#39;]), attention_map=attention_map, heatmap=self.gcam_dict[&#39;heatmap&#39;], dim=self.gcam_dict[&#39;dim&#39;])
+        self.gcam_dict[&#39;counter&#39;] += 1
+
+def _comp_score(self, attention_map, batch, mask):  # TODO: Not multiclass compatible, maybe multiclass parameter in init?
+    if self.gcam_dict[&#39;mask_key&#39;] is not None:
+        mask = batch[self.gcam_dict[&#39;mask_key&#39;]]
+    elif mask is None:
+        raise AttributeError(&#34;Either mask_key during initialization or mask during forward needs to be set&#34;)
+    return score_utils.comp_score(attention_map, mask, self.gcam_dict[&#39;metric&#39;], self.gcam_dict[&#39;threshold&#39;])
+
+def _comp_mean_score(self, show):
+    mean_scores = defaultdict(float)
+    for layer_name in self.gcam_dict[&#39;scores&#39;].keys():
+        mean_score = np.mean(self.gcam_dict[&#39;scores&#39;][layer_name])
+        mean_scores[layer_name] = mean_score
+        if show:
+            print(&#34;Layer: {}, mean score: {}&#34;.format(layer_name, mean_score))
+    return mean_scores
+
+def _scores2csv(self, mean_scores):
+    df = pd.DataFrame.from_dict(self.gcam_dict[&#39;scores&#39;])
+    new_entry = pd.DataFrame([mean_scores.values()], columns=mean_scores.keys())
+    score_ids = list(range(len(df)))
+    score_ids = list(map(str, score_ids))
+    score_ids.append(&#34;Mean&#34;)
+    df = df.append(new_entry)
+    df.insert(0, &#34;Layer&#34;, score_ids, True)
+    df.to_csv(self.gcam_dict[&#39;output_dir&#39;] + &#34;/scores.csv&#34;, index=False)</code></pre>
+</details>
+</section>
+<section>
+</section>
+<section>
+</section>
+<section>
+<h2 class="section-title" id="header-functions">Functions</h2>
+<dl>
+<dt id="gcam.gcam_inject.dump"><code class="name flex">
+<span>def <span class="ident">dump</span></span>(<span>self, show=True)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def dump(self, show=True):
+    if self.gcam_dict[&#39;save_pickle&#39;]:
+        with open(self.gcam_dict[&#39;output_dir&#39;] + &#39;/attention_maps.pkl&#39;, &#39;wb&#39;) as handle:  # TODO: Save every 1GB
+            pickle.dump(self.gcam_dict[&#39;pickle_maps&#39;], handle, protocol=pickle.HIGHEST_PROTOCOL)
+    mean_scores = self._comp_mean_score(show)
+    if self.gcam_dict[&#39;save_scores&#39;]:
+        self._scores2csv(mean_scores)</code></pre>
+</details>
+</dd>
+<dt id="gcam.gcam_inject.forward"><code class="name flex">
+<span>def <span class="ident">forward</span></span>(<span>self, batch, label=None, mask=None)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def forward(self, batch, label=None, mask=None):
+    # print(&#34;-------------------------- FORWARD GCAM HOOK --------------------------&#34;)
+    self.gcam_dict[&#39;model_backend&#39;].model.eval()
+    with torch.enable_grad():
+        batch_size, data_shape = self._unpack_batch(batch)
+        output = self.gcam_dict[&#39;model_backend&#39;].forward(batch, data_shape)
+        self.gcam_dict[&#39;model_backend&#39;].backward(output=output, label=label)  # TODO: Check if I can remove output
+        attention_map = self.gcam_dict[&#39;model_backend&#39;].generate()
+        if len(attention_map.keys()) == 1:
+            self.gcam_dict[&#39;current_attention_map&#39;] = attention_map[list(attention_map.keys())[0]][0]
+            #self.gcam_dict[&#39;current_attention_map&#39;] = gradcam_utils.normalize(self.gcam_dict[&#39;current_attention_map&#39;])*255.0
+            #self.gcam_dict[&#39;current_attention_map&#39;] = torch.tensor(self.gcam_dict[&#39;current_attention_map&#39;]).unsqueeze(0).unsqueeze(0).to(str(self.gcam_dict[&#39;device&#39;]))
+            self.gcam_dict[&#39;current_layer&#39;] = list(attention_map.keys())[0]
+        scores = self._process_attention_maps(attention_map, batch, mask, batch_size)
+        if self.gcam_dict[&#39;_replace_output&#39;]:
+            if len(attention_map.keys()) == 1:
+                output = torch.tensor(self.gcam_dict[&#39;current_attention_map&#39;]).unsqueeze(0).unsqueeze(0).to(str(self.gcam_dict[&#39;device&#39;]))
+            else:
+                raise RuntimeError(&#34;Not possible to replace output when layer is &#39;full&#39;, only with &#39;auto&#39; or a manually set layer&#34;)
+        if self.gcam_dict[&#39;return_score&#39;]:
+            return output, scores
+        else:
+            #output = gradcam_utils.normalize(output) * 255.0
+            return output</code></pre>
+</details>
+</dd>
+<dt id="gcam.gcam_inject.get_attention_map"><code class="name flex">
+<span>def <span class="ident">get_attention_map</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def get_attention_map(self):
+    return self.gcam_dict[&#39;current_attention_map&#39;]</code></pre>
+</details>
+</dd>
+<dt id="gcam.gcam_inject.get_layers"><code class="name flex">
+<span>def <span class="ident">get_layers</span></span>(<span>self, reverse=False)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def get_layers(self, reverse=False):
+    return self.gcam_dict[&#39;model_backend&#39;].layers(reverse)</code></pre>
+</details>
+</dd>
+<dt id="gcam.gcam_inject.inject"><code class="name flex">
+<span>def <span class="ident">inject</span></span>(<span>model, output_dir=None, backend='gcam', layer='auto', input_key=None, mask_key=None, postprocessor=None, retain_graph=False, dim=2, save_scores=False, save_maps=False, save_pickle=False, evaluate=False, metric='wioa', return_score=False, threshold=0.3, registered_only=False)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def inject(model, output_dir=None, backend=&#34;gcam&#34;, layer=&#39;auto&#39;, input_key=None, mask_key=None, postprocessor=None,
+           retain_graph=False, dim=2, save_scores=False, save_maps=False, save_pickle=False, evaluate=False, metric=&#34;wioa&#34;,
+           return_score=False, threshold=0.3, registered_only=False):
+    # torch.backends.cudnn.enabled = False # TODO: out of memory
+    if output_dir is not None:
+        Path(output_dir).mkdir(parents=True, exist_ok=True)
+
+    model.eval()
+    model_backend = copy.deepcopy(model)
+    model_backend, heatmap = _assign_backend(backend, model_backend, layer, postprocessor, retain_graph, dim, registered_only)
+
+    # Save every attribute in a dict which is added to the model attributes
+    # It is ugly but it avoids name conflicts
+    gcam_dict = {}
+
+    gcam_dict[&#39;output_dir&#39;] = output_dir
+    gcam_dict[&#39;layer&#39;] = layer
+    gcam_dict[&#39;input_key&#39;] = input_key
+    gcam_dict[&#39;mask_key&#39;] = mask_key
+    gcam_dict[&#39;model_backend&#39;] = model_backend
+    gcam_dict[&#39;heatmap&#39;] = heatmap
+    gcam_dict[&#39;counter&#39;] = 0
+    gcam_dict[&#39;dim&#39;] = dim
+    gcam_dict[&#39;save_scores&#39;] = save_scores
+    gcam_dict[&#39;save_maps&#39;] = save_maps
+    gcam_dict[&#39;save_pickle&#39;] = save_pickle
+    gcam_dict[&#39;evaluate&#39;] = evaluate
+    gcam_dict[&#39;metric&#39;] = metric
+    gcam_dict[&#39;return_score&#39;] = return_score
+    gcam_dict[&#39;_replace_output&#39;] = False
+    gcam_dict[&#39;threshold&#39;] = threshold
+    gcam_dict[&#39;pickle_maps&#39;] = []
+    gcam_dict[&#39;scores&#39;] = defaultdict(list)
+    gcam_dict[&#39;current_attention_map&#39;] = None
+    gcam_dict[&#39;current_layer&#39;] = None
+    gcam_dict[&#39;device&#39;] = next(model.parameters()).device
+    setattr(model, &#39;gcam_dict&#39;, gcam_dict)
+
+    if output_dir is None and (save_scores is not None or save_maps is not None or save_pickle is not None):
+        raise AttributeError(&#34;output_dir needs to be set if save_scores, save_maps or save_pickle is set to true&#34;)
+
+    model.get_layers = types.MethodType(get_layers, model)
+    model.get_attention_map = types.MethodType(get_attention_map, model)
+    model.save_attention_map = types.MethodType(save_attention_map, model)
+    model.replace_output = types.MethodType(replace_output, model)
+    model.dump = types.MethodType(dump, model)
+    model.forward = types.MethodType(forward, model)
+
+    model._assign_backend = types.MethodType(_assign_backend, model)
+    model._unpack_batch = types.MethodType(_unpack_batch, model)
+    model._process_attention_maps = types.MethodType(_process_attention_maps, model)
+    model._save_file = types.MethodType(_save_attention_map, model)
+    model._comp_score = types.MethodType(_comp_score, model)
+    model._comp_mean_score = types.MethodType(_comp_mean_score, model)
+    model._scores2csv = types.MethodType(_scores2csv, model)</code></pre>
+</details>
+</dd>
+<dt id="gcam.gcam_inject.replace_output"><code class="name flex">
+<span>def <span class="ident">replace_output</span></span>(<span>self, replace)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def replace_output(self, replace):
+    self.gcam_dict[&#39;_replace_output&#39;] = replace</code></pre>
+</details>
+</dd>
+<dt id="gcam.gcam_inject.save_attention_map"><code class="name flex">
+<span>def <span class="ident">save_attention_map</span></span>(<span>self, attention_map)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def save_attention_map(self, attention_map):
+    gcam_utils.save_attention_map(filename=self.gcam_dict[&#39;output_dir&#39;] + &#34;/&#34; + self.gcam_dict[&#39;current_layer&#39;] + &#34;/attention_map_&#34; +
+                                           str(self.gcam_dict[&#39;counter&#39;]), attention_map=attention_map, heatmap=self.gcam_dict[&#39;heatmap&#39;], dim=self.gcam_dict[&#39;dim&#39;])
+    self.gcam_dict[&#39;counter&#39;] += 1</code></pre>
+</details>
+</dd>
+</dl>
+</section>
+<section>
+</section>
+</article>
+<nav id="sidebar">
+<h1>Index</h1>
+<div class="toc">
+<ul></ul>
+</div>
+<ul id="index">
+<li><h3>Super-module</h3>
+<ul>
+<li><code><a title="gcam" href="index.html">gcam</a></code></li>
+</ul>
+</li>
+<li><h3><a href="#header-functions">Functions</a></h3>
+<ul class="two-column">
+<li><code><a title="gcam.gcam_inject.dump" href="#gcam.gcam_inject.dump">dump</a></code></li>
+<li><code><a title="gcam.gcam_inject.forward" href="#gcam.gcam_inject.forward">forward</a></code></li>
+<li><code><a title="gcam.gcam_inject.get_attention_map" href="#gcam.gcam_inject.get_attention_map">get_attention_map</a></code></li>
+<li><code><a title="gcam.gcam_inject.get_layers" href="#gcam.gcam_inject.get_layers">get_layers</a></code></li>
+<li><code><a title="gcam.gcam_inject.inject" href="#gcam.gcam_inject.inject">inject</a></code></li>
+<li><code><a title="gcam.gcam_inject.replace_output" href="#gcam.gcam_inject.replace_output">replace_output</a></code></li>
+<li><code><a title="gcam.gcam_inject.save_attention_map" href="#gcam.gcam_inject.save_attention_map">save_attention_map</a></code></li>
+</ul>
+</li>
+</ul>
+</nav>
+</main>
+<footer id="footer">
+<p>Generated by <a href="https://pdoc3.github.io/pdoc"><cite>pdoc</cite> 0.8.1</a>.</p>
+</footer>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/highlight.min.js"></script>
+<script>hljs.initHighlightingOnLoad()</script>
+</body>
+</html>
