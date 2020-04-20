@@ -1,44 +1,43 @@
 import torch
 import numpy as np
 from torch import nn
-from gcam.backends.base import create_base_wrapper
+from gcam.backends.base import _BaseWrapper
 
-def create_guided_back_propagation(base):
-    class GuidedBackPropagation(create_base_wrapper(base)):
-        """
-        "Striving for Simplicity: the All Convolutional Net"
-        https://arxiv.org/pdf/1412.6806.pdf
-        Look at Figure 1 on page 8.
-        """
 
-        def __init__(self, model, postprocessor=None, retain_graph=False, dim=2):
-            super(GuidedBackPropagation, self).__init__(model, postprocessor=postprocessor, retain_graph=retain_graph)
-            self.dim = dim
+class GuidedBackPropagation(_BaseWrapper):
+    """
+    "Striving for Simplicity: the All Convolutional Net"
+    https://arxiv.org/pdf/1412.6806.pdf
+    Look at Figure 1 on page 8.
+    """
 
-            def backward_hook(module, grad_in, grad_out):
-                # Cut off negative gradients
-                if isinstance(module, nn.ReLU):
-                    return (torch.clamp(grad_in[0], min=0.0),)
+    def __init__(self, model, postprocessor=None, retain_graph=False, dim=2):
+        super(GuidedBackPropagation, self).__init__(model, postprocessor=postprocessor, retain_graph=retain_graph)
+        self.dim = dim
 
-            for module in self.model.named_modules():
-                self.handlers.append(module[1].register_backward_hook(backward_hook))
+        def backward_hook(module, grad_in, grad_out):
+            # Cut off negative gradients
+            if isinstance(module, nn.ReLU):
+                return (torch.clamp(grad_in[0], min=0.0),)
 
-        def forward(self, data, data_shape):
-            self.data = data.requires_grad_()
-            return super(GuidedBackPropagation, self).forward(self.data)
+        for module in self.model.named_modules():
+            self.handlers.append(module[1].register_backward_hook(backward_hook))
 
-        def generate(self):
-            attention_map = self.data.grad.clone()
-            self.data.grad.zero_()
-            attention_map = torch.mean(attention_map, dim=1)
-            attention_map = attention_map.cpu().numpy()
-            # if self.dim == 2:
-            #     attention_map = attention_map.cpu().numpy().transpose(0, 2, 3, 1)
-            # else:
-            #     attention_map = attention_map.cpu().numpy().transpose(0, 2, 3, 4, 1)
-            #attention_map = np.mean(attention_map, axis=3)
-            #attention_map = torch.mean(attention_map, dim=1)
-            attention_maps = {}
-            attention_maps[""] = attention_map
-            return attention_maps
-    return GuidedBackPropagation
+    def forward(self, data, data_shape):
+        self.data = data.requires_grad_()
+        return super(GuidedBackPropagation, self).forward(self.data)
+
+    def generate(self):
+        attention_map = self.data.grad.clone()
+        self.data.grad.zero_()
+        attention_map = torch.mean(attention_map, dim=1)
+        attention_map = attention_map.cpu().numpy()
+        # if self.dim == 2:
+        #     attention_map = attention_map.cpu().numpy().transpose(0, 2, 3, 1)
+        # else:
+        #     attention_map = attention_map.cpu().numpy().transpose(0, 2, 3, 4, 1)
+        # attention_map = np.mean(attention_map, axis=3)
+        # attention_map = torch.mean(attention_map, dim=1)
+        attention_maps = {}
+        attention_maps[""] = attention_map
+        return attention_maps

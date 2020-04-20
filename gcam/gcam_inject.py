@@ -4,10 +4,10 @@ import types
 import pickle
 import pandas as pd
 from gcam import gcam_utils
-from gcam.backends.guided_backpropagation import create_guided_back_propagation
-from gcam.backends.grad_cam import create_grad_cam
-from gcam.backends.guided_grad_cam import create_guided_grad_cam
-from gcam.backends.grad_cam_pp import create_grad_cam_pp
+from gcam.backends.guided_backpropagation import GuidedBackPropagation
+from gcam.backends.grad_cam import GradCAM
+from gcam.backends.guided_grad_cam import GuidedGradCam
+from gcam.backends.grad_cam_pp import GradCamPP
 from gcam import score_utils
 from collections import defaultdict
 import copy
@@ -25,6 +25,33 @@ def inject(model, output_dir=None, backend="gcam", layer='auto', input_key=None,
     model.eval()
     model_backend = copy.deepcopy(model)
     model_backend, heatmap = _assign_backend(backend, model_backend, layer, postprocessor, retain_graph, dim, registered_only)
+
+    # Save every attribute in a dict which is added to the model attributes
+    # It is ugly but it avoids name conflicts
+    # gcam_dict = {}
+    # 
+    # gcam_dict['output_dir'] = output_dir
+    # gcam_dict['layer'] = layer
+    # gcam_dict['input_key'] = input_key
+    # gcam_dict['mask_key'] = mask_key
+    # gcam_dict['model_backend'] = model_backend
+    # gcam_dict['heatmap'] = heatmap
+    # gcam_dict['counter'] = 0
+    # gcam_dict['dim'] = dim
+    # gcam_dict['save_scores'] = save_scores
+    # gcam_dict['save_maps'] = save_maps
+    # gcam_dict['save_pickle'] = save_pickle
+    # gcam_dict['evaluate'] = evaluate
+    # gcam_dict['metric'] = metric
+    # gcam_dict['return_score'] = return_score
+    # gcam_dict['_replace_output'] = False
+    # gcam_dict['threshold'] = threshold
+    # gcam_dict['pickle_maps'] = []
+    # gcam_dict['scores'] = defaultdict(list)
+    # gcam_dict['current_attention_map'] = None
+    # gcam_dict['current_layer'] = None
+    # gcam_dict['device'] = next(model.parameters()).device
+    # setattr(model, 'gcam_dict', gcam_dict)
 
     setattr(model, 'output_dir', output_dir)
     setattr(model, 'layer', layer)
@@ -57,6 +84,7 @@ def inject(model, output_dir=None, backend="gcam", layer='auto', input_key=None,
     model.replace_output = types.MethodType(replace_output, model)
     model.dump = types.MethodType(dump, model)
     model.forward = types.MethodType(forward, model)
+
     model._assign_backend = types.MethodType(_assign_backend, model)
     model._unpack_batch = types.MethodType(_unpack_batch, model)
     model._process_attention_maps = types.MethodType(_process_attention_maps, model)
@@ -114,13 +142,13 @@ def forward(self, batch, label=None, mask=None):
 
 def _assign_backend(backend, model, target_layers, postprocessor, retain_graph, dim, registered_only):
     if backend == "gbp":
-        return create_guided_back_propagation(object)(model=model, postprocessor=postprocessor, retain_graph=retain_graph, dim=dim), False
+        return GuidedBackPropagation(model=model, postprocessor=postprocessor, retain_graph=retain_graph, dim=dim), False
     elif backend == "gcam":
-        return create_grad_cam(object)(model=model, target_layers=target_layers, postprocessor=postprocessor, retain_graph=retain_graph, dim=dim, registered_only=registered_only), True
+        return GradCAM(model=model, target_layers=target_layers, postprocessor=postprocessor, retain_graph=retain_graph, dim=dim, registered_only=registered_only), True
     elif backend == "ggcam":
-        return create_guided_grad_cam(object)(model=model, target_layers=target_layers, postprocessor=postprocessor, retain_graph=retain_graph, dim=dim), False
+        return GuidedGradCam(model=model, target_layers=target_layers, postprocessor=postprocessor, retain_graph=retain_graph, dim=dim), False
     elif backend == "gcampp":
-        return create_grad_cam_pp(object)(model=model, target_layers=target_layers, postprocessor=postprocessor, retain_graph=retain_graph, dim=dim), True
+        return GradCamPP(model=model, target_layers=target_layers, postprocessor=postprocessor, retain_graph=retain_graph, dim=dim), True
     else:
         raise TypeError("Backend does not exist")
 
