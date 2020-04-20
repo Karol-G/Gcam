@@ -1,6 +1,28 @@
 import numpy as np
+import torch
 import cv2
 import copy
+
+def comp_score(attention_map, mask, metric="wioa", threshold=0.3):
+    if isinstance(mask, torch.Tensor):
+        mask = mask.detach().cpu().numpy()
+    else:
+        mask = np.asarray(mask)
+    allowed = [0, 1, 0.0, 1.0]
+    if np.min(mask) in allowed and np.max(mask) in allowed:
+        mask = mask.astype(int)
+    else:
+        raise TypeError("Mask values need to be 0/1")
+    binary_attention_map, mask, weights = preprocessing(attention_map, mask, threshold)
+    if metric[0] != "w":
+        weights = None
+    if metric == "ioa" or metric == "wioa":
+        score = intersection_over_attention(binary_attention_map, mask, weights)
+    elif metric == "iou" or metric == "wiou":
+        score = intersection_over_union(binary_attention_map, mask, weights)
+    else:
+        score = metric(attention_map, mask, attention_map, weights)
+    return score
 
 def preprocessing(attention_map, mask, attention_threshold):
     attention_map = _resize_attention_map(attention_map, mask.shape)

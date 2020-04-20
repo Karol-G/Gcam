@@ -1,7 +1,6 @@
 from tests.test_segmentation.unet_seg_dataset import UnetSegDataset as Dataset
 from tests.test_segmentation.model.unet.unet_model import UNet
-from gcam.gcam import Gcam
-from gcam.gcam2 import inject
+from gcam import gcam
 import torch
 import os
 from os import path
@@ -24,7 +23,7 @@ class Tmp():
         self.model.eval()
 
     def test_gbp_hook(self):
-        inject(self.model, output_dir="results/unet_seg/test_gbp_hook", backend="gbp",
+        gcam.inject(self.model, output_dir="results/unet_seg/test_gbp_hook", backend="gbp",
                      postprocessor="sigmoid", evaluate=True, save_scores=True, save_maps=True, save_pickle=True, metric="wioa", dim=2)
         self.model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
@@ -47,7 +46,7 @@ class Tmp():
 
     def test_gcam_hook(self):
         layer = 'auto'
-        inject(self.model, output_dir="results/unet_seg/test_gcam_hook", backend="gcam", layer=layer,
+        gcam.inject(self.model, output_dir="results/unet_seg/test_gcam_hook", backend="gcam", layer=layer,
                                 postprocessor="sigmoid", evaluate=True, save_scores=True, save_maps=True, save_pickle=True, metric="wioa", dim=2)
         self.model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
@@ -70,7 +69,7 @@ class Tmp():
 
     def test_ggcam_hook(self):
         layer = 'full'
-        inject(self.model, output_dir="results/unet_seg/test_ggcam_hook", backend="ggcam", layer=layer,
+        gcam.inject(self.model, output_dir="results/unet_seg/test_ggcam_hook", backend="ggcam", layer=layer,
                                 postprocessor="sigmoid", evaluate=True, save_scores=True, save_maps=True, save_pickle=True, metric="wioa", dim=2)
         self.model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
@@ -93,7 +92,7 @@ class Tmp():
 
     def test_gcampp_hook(self):
         layer = 'full'
-        inject(self.model, output_dir="results/unet_seg/test_gcampp_hook", backend="gcampp", layer=layer,
+        gcam.inject(self.model, output_dir="results/unet_seg/test_gcampp_hook", backend="gcampp", layer=layer,
                      postprocessor="sigmoid", evaluate=True, save_scores=True, save_maps=True, save_pickle=True, metric="wioa", dim=2)
         self.model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)

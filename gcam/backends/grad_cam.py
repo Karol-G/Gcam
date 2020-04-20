@@ -27,7 +27,7 @@ def create_grad_cam(base):
         Look at Figure 2 on page 4
         """
 
-        def __init__(self, model, target_layers=None, postprocessor=None, retain_graph=False, dim=2):
+        def __init__(self, model, target_layers=None, postprocessor=None, retain_graph=False, dim=2, registered_only=False):
             super(GradCAM, self).__init__(model, postprocessor=postprocessor, retain_graph=retain_graph)
             self.fmap_pool = OrderedDict()
             self.grad_pool = OrderedDict()
@@ -40,6 +40,7 @@ def create_grad_cam(base):
             self.target_layers = target_layers  # list
             self.registered_hooks = {}
             self.dim = dim
+            self.registered_only = registered_only
 
             def forward_hook(key):
                 def forward_hook_(module, input, output):
@@ -135,9 +136,11 @@ def create_grad_cam(base):
             else:
                 attention_maps = {}
                 for layer in self.target_layers:
-                    self._check_hooks(layer)
-                    attention_maps_tmp = self._extract_attentions(str(layer))
-                    attention_maps[layer] = attention_maps_tmp
+                    if not self.registered_only:
+                        self._check_hooks(layer)
+                    if self.registered_hooks[layer][0] and self.registered_hooks[layer][1]:
+                        attention_maps_tmp = self._extract_attentions(str(layer))
+                        attention_maps[layer] = attention_maps_tmp
             return attention_maps
 
         def _extract_attentions(self, layer):

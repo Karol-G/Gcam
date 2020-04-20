@@ -9,7 +9,7 @@ MIN_SHAPE = (500, 500)
 def save_attention_map(filename, attention_map, heatmap, dim, data=None):
     attention_map = normalize(attention_map)
     attention_map = generate_attention_map(attention_map, heatmap, dim, data)
-    _save_attention_map(filename, attention_map, dim)
+    _save_file(filename, attention_map, dim)
 
 def generate_attention_map(attention_map, heatmap, dim, data=None):
     if dim == 2:
@@ -98,7 +98,7 @@ def normalize(x):
         return (x - np.min(x)) / (np.max(x) - np.min(x))
 
 
-def _save_attention_map(filename, attention_map, dim):
+def _save_file(filename, attention_map, dim):
     if dim == 2:
         cv2.imwrite(filename + ".png", attention_map)
     else:
@@ -108,3 +108,29 @@ def _save_attention_map(filename, attention_map, dim):
         attention_map = nib.Nifti1Image(attention_map, affine=np.eye(4))
         nib.save(attention_map, filename + ".nii.gz")
 
+def get_layers(model, reverse=False):
+    layer_names = []
+    for name, _ in model.named_modules():
+        layer_names.append(name)
+
+    if layer_names[0] == "":
+        layer_names = layer_names[1:]
+
+    index = 0
+    sub_index = 0
+    while True:
+        if index == len(layer_names) - 1:
+            break
+        if sub_index < len(layer_names) - 1 and layer_names[index] == layer_names[sub_index + 1][:len(layer_names[index])]:
+            sub_index += 1
+        elif sub_index > index:
+            layer_names.insert(sub_index, layer_names.pop(index))
+            sub_index = index
+        else:
+            index += 1
+            sub_index = index
+
+    if reverse:
+        layer_names.reverse()
+
+    return layer_names

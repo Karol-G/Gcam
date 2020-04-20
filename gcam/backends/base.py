@@ -1,6 +1,7 @@
 import torch
 import numpy as np
 from torch.nn import functional as F
+from gcam import gcam_utils
 
 def create_base_wrapper(base):
     class _BaseWrapper(base):
@@ -78,30 +79,6 @@ def create_base_wrapper(base):
                 handle.remove()
 
         def layers(self, reverse=False):
-            layer_names = []
-            for name, _ in self.model.named_modules():
-                layer_names.append(name)
-
-            if layer_names[0] == "":
-                layer_names = layer_names[1:]
-
-            index = 0
-            sub_index = 0
-            while True:
-                if index == len(layer_names) - 1:
-                    break
-                if sub_index < len(layer_names) - 1 and layer_names[index] == layer_names[sub_index + 1][:len(layer_names[index])]:
-                    sub_index += 1
-                elif sub_index > index:
-                    layer_names.insert(sub_index, layer_names.pop(index))
-                    sub_index = index
-                else:
-                    index += 1
-                    sub_index = index
-
-            if reverse:
-                layer_names.reverse()
-
-            return layer_names
+            return gcam_utils.get_layers(self.model, reverse)
 
     return _BaseWrapper
