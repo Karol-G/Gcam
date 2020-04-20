@@ -7,6 +7,7 @@ from gcam.backends.guided_backpropagation import GuidedBackPropagation
 
 class GuidedGradCam(nn.Module):
     def __init__(self, model, target_layers=None, postprocessor=None, retain_graph=False, dim=2):
+        super(GuidedGradCam, self).__init__()
         self.model_GCAM = GradCAM(model=model, target_layers=target_layers, postprocessor=postprocessor, retain_graph=retain_graph, dim=dim)
         self.model_GBP = GuidedBackPropagation(model=model, postprocessor=postprocessor, retain_graph=retain_graph, dim=dim)
 

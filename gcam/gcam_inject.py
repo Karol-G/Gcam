@@ -96,7 +96,6 @@ def dump(self, show=True):
 
 def forward(self, batch, label=None, mask=None):
     # print("-------------------------- FORWARD GCAM HOOK --------------------------")
-    self.gcam_dict['model_backend'].model.eval()
     with torch.enable_grad():
         batch_size, data_shape = self._unpack_batch(batch)
         output = self.gcam_dict['model_backend'].forward(batch, data_shape)

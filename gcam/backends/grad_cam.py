@@ -80,13 +80,20 @@ class GradCAM(_BaseWrapper):
         else:
             return F.adaptive_avg_pool3d(grads, 1)
 
+    def _compute_grad_weights_batch(self, grad_list):
+        weight_list = []
+        for grads in grad_list:
+            weight_list.append(self._compute_grad_weights(grads))
+        return weight_list
+
+
     def forward(self, data, data_shape):
         self.data_shape = data_shape
         return super(GradCAM, self).forward(data)
 
     def _auto_layer_selection(self):
         # It's ugly but it works ;)
-        fmap_list, weight_list = [], []
+        fmap_list, grad_list = [], []
         module_names = self.layers(reverse=True)
         found_valid_layer = False
 
@@ -107,7 +114,8 @@ class GradCAM(_BaseWrapper):
                     print("Selected module layer: {}".format(layer))
                     fmap_list.append(self._find(self.fmap_pool, layer)[i])
                     grads = self._find(self.grad_pool, layer)[i]
-                    weight_list.append(self._compute_grad_weights(grads))
+                    #weight_list.append(self._compute_grad_weights(grads))
+                    grad_list.append(grads)
                     found_valid_layer = True
                     break
                 except ValueError:
@@ -120,15 +128,15 @@ class GradCAM(_BaseWrapper):
         if not found_valid_layer:
             raise ValueError("Could not find a valid layer")
 
-        return layer, fmap_list, weight_list
+        return layer, fmap_list, grad_list
 
     def generate(self):
         if self._target_layers == "auto":
-            layer, fmaps, weights = self._auto_layer_selection()
+            layer, fmaps, grads = self._auto_layer_selection()
             self._check_hooks(layer)
             attention_maps = []
             for i in range(self.logits.shape[0]):
-                attention_map = self._generate_helper(fmaps[i].unsqueeze(0), weights[i].unsqueeze(0))
+                attention_map = self._generate_helper(fmaps[i].unsqueeze(0), grads[i].unsqueeze(0))
                 attention_map = attention_map.squeeze().cpu().numpy()
                 attention_maps.append(attention_map)
             attention_maps = {layer: attention_maps}
@@ -145,16 +153,16 @@ class GradCAM(_BaseWrapper):
     def _extract_attentions(self, layer):
         fmaps = self._find(self.fmap_pool, layer)
         grads = self._find(self.grad_pool, layer)
-        weights = self._compute_grad_weights(grads)
-        gcam_tensor = self._generate_helper(fmaps, weights)
+        #weights = self._compute_grad_weights(grads)
+        gcam_tensor = self._generate_helper(fmaps, grads)
         attention_maps = []
         for i in range(self.logits.shape[0]):
-            attention_map = gcam_tensor[i]  # .unsqueeze(0)
-            attention_map = attention_map.squeeze().cpu().numpy()
+            attention_map = gcam_tensor[i].squeeze().cpu().numpy()
             attention_maps.append(attention_map)
         return attention_maps
 
-    def _generate_helper(self, fmaps, weights):
+    def _generate_helper(self, fmaps, grads):
+        weights = self._compute_grad_weights(grads)
         attention_map = torch.mul(fmaps, weights).sum(dim=1, keepdim=True)
         attention_map = F.relu(attention_map)
 
