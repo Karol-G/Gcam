@@ -54,7 +54,7 @@ def inject(model, output_dir=None, backend="gcam", layer='auto', input_key=None,
     setattr(model, 'gcam_dict', gcam_dict)
 
     if output_dir is None and (save_scores is not None or save_maps is not None or save_pickle is not None):
-        raise AttributeError("output_dir needs to be set if save_scores, save_maps or save_pickle is set to true")
+        raise ValueError("output_dir needs to be set if save_scores, save_maps or save_pickle is set to true")
 
     model.get_layers = types.MethodType(get_layers, model)
     model.get_attention_map = types.MethodType(get_attention_map, model)
@@ -153,6 +153,8 @@ def _process_attention_maps(self, attention_map, batch, mask, batch_size):
             attention_map_j = attention_map[layer_name][j]
             self._save_file(attention_map_j, layer_output_dir)
             if self.gcam_dict['evaluate']:
+                if mask is None:
+                    raise ValueError("Mask cannot be none in evaluation mode")
                 score = self._comp_score(attention_map_j, batch, mask[j].squeeze())
                 batch_scores[layer_name].append(score)
                 self.gcam_dict['scores'][layer_name].append(score)
@@ -169,7 +171,7 @@ def _comp_score(self, attention_map, batch, mask):  # TODO: Not multiclass compa
     if self.gcam_dict['mask_key'] is not None:
         mask = batch[self.gcam_dict['mask_key']]
     elif mask is None:
-        raise AttributeError("Either mask_key during initialization or mask during forward needs to be set")
+        raise ValueError("Either mask_key during initialization or mask during forward needs to be set")
     return score_utils.comp_score(attention_map, mask, self.gcam_dict['metric'], self.gcam_dict['threshold'])
 
 def _comp_mean_score(self, show):

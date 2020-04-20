@@ -1,6 +1,6 @@
 from torchvision import models, transforms
 from torchvision.datasets import ImageFolder
-from legacy import gcam_old
+from gcam import gcam
 import torch
 import cv2
 from torch.utils.data import DataLoader
@@ -29,15 +29,17 @@ class Tmp():
         return image
 
     def test_gbp_hook(self):
-        model = gcam_old.inject(self.model, output_dir="results/resnet152/test_gbp_hook", backend="gbp", input_key=None, mask_key=None, postprocessor="softmax")
-        model.eval()
+        gcam.inject(self.model, output_dir="results/resnet152/test_gbp_hook", backend="gbp", postprocessor="softmax",
+                    evaluate=False, save_scores=False, save_maps=True, save_pickle=True, metric="wioa", dim=2)
+        self.model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
         # TODO: Memory leak finden (Oder nur beim testen?)
         #outputs = []
         for i, batch in enumerate(data_loader):
-            output = model(batch[0])
+            output = self.model(batch[0])
             #outputs.append(output)
 
+        self.model.dump()
         gc.collect()
         torch.cuda.empty_cache()
 
@@ -49,16 +51,18 @@ class Tmp():
         #     shutil.rmtree("results")
 
     def test_gcam_hook(self):
-        layer = 'layer4'
-        model = gcam_old.inject(self.model, output_dir="results/resnet152/test_gcam_hook", backend="gcam", layer=layer, input_key=None, mask_key=None, postprocessor="softmax")
-        model.eval()
+        layer = 'layer4'  # layer4
+        gcam.inject(self.model, output_dir="results/resnet152/test_gcam_hook", backend="gcam", layer=layer, postprocessor="softmax",
+                    evaluate=False, save_scores=False, save_maps=True, save_pickle=True, metric="wioa", dim=2)
+        self.model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
         # TODO: Memory leak finden (Oder nur beim testen?)
         #outputs = []
         for i, batch in enumerate(data_loader):
-            output = model(batch[0], label="best")
+            output = self.model(batch[0], label="best")
             #outputs.append(output)
 
+        self.model.dump()
         gc.collect()
         torch.cuda.empty_cache()
 
@@ -71,15 +75,17 @@ class Tmp():
 
     def test_ggcam_hook(self):
         layer = 'layer4'
-        model = gcam_old.inject(self.model, output_dir="results/resnet152/test_ggcam_hook", backend="ggcam", layer=layer, input_key=None, mask_key=None, postprocessor="softmax")
-        model.eval()
+        gcam.inject(self.model, output_dir="results/resnet152/test_ggcam_hook", backend="ggcam", layer=layer, postprocessor="softmax",
+                    evaluate=False, save_scores=False, save_maps=True, save_pickle=True, metric="wioa", dim=2)
+        self.model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
         # TODO: Memory leak finden (Oder nur beim testen?)
         #outputs = []
         for i, batch in enumerate(data_loader):
-            output = model(batch[0], label="best")
+            output = self.model(batch[0], label="best")
             #outputs.append(output)
 
+        self.model.dump()
         gc.collect()
         torch.cuda.empty_cache()
 
@@ -92,15 +98,17 @@ class Tmp():
 
     def test_gcampp_hook(self):
         layer = 'layer4'
-        model = gcam_old.inject(self.model, output_dir="results/resnet152/test_gcampp_hook", backend="gcampp", layer=layer, input_key=None, mask_key=None, postprocessor="softmax")
-        model.eval()
+        gcam.inject(self.model, output_dir="results/resnet152/test_gcampp_hook", backend="gcampp", layer=layer, postprocessor="softmax",
+                    evaluate=False, save_scores=False, save_maps=True, save_pickle=True, metric="wioa", dim=2)
+        self.model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
         # TODO: Memory leak finden (Oder nur beim testen?)
         #outputs = []
         for i, batch in enumerate(data_loader):
-            output = model(batch[0], label="best")
+            output = self.model(batch[0], label="best")
             #outputs.append(output)
 
+        self.model.dump()
         gc.collect()
         torch.cuda.empty_cache()
 
@@ -113,7 +121,7 @@ class Tmp():
 
 if __name__ == '__main__':
     test = Tmp()
-    test.test_gbp_hook()
-    test.test_gcam_hook()
-    test.test_ggcam_hook()
+    #test.test_gbp_hook()
+    #test.test_gcam_hook()
+    #test.test_ggcam_hook()
     test.test_gcampp_hook()

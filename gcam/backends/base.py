@@ -37,12 +37,12 @@ class _BaseWrapper(nn.Module):
             self.logits = output
 
         self.logits = self.post_processing(self.postprocessor, self.logits)
-        mask = self._mask_output(output, label)
+        self.mask = self._mask_output(output, label)
 
-        if mask is None:
+        if self.mask is None:
             self.logits.backward(gradient=self.logits, retain_graph=self.retain_graph)
         else:
-            self.logits.backward(gradient=mask, retain_graph=self.retain_graph)
+            self.logits.backward(gradient=self.mask, retain_graph=self.retain_graph)
 
     def post_processing(self, postprocessor, output):
         if postprocessor is None:
@@ -54,7 +54,7 @@ class _BaseWrapper(nn.Module):
         elif callable(postprocessor):
             output = postprocessor(output)
         else:
-            raise AttributeError("Postprocessor does not exist")
+            raise ValueError("Postprocessor does not exist")
         return output
 
     def _mask_output(self, output, label):

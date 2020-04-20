@@ -23,7 +23,7 @@ def comp_score(attention_map, mask, metric="wioa", threshold=0.3):
     elif callable(metric):
         score = metric(attention_map, mask, attention_map, weights)
     else:
-        raise AttributeError("Metric does not exist")
+        raise ValueError("Metric does not exist")
     return score
 
 def _preprocessing(attention_map, mask, attention_threshold):

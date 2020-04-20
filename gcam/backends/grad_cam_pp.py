@@ -25,10 +25,15 @@ class GradCamPP(GradCAM):
 
         alpha = alpha_num.div(alpha_denom + 1e-7)
 
-        logits = F.interpolate(self.logits, grads.shape[2:], mode="bilinear", align_corners=False)  # TODO: Only works with 2D
+        mask = self.mask.squeeze()
+        if self.mask is None:
+            prob_weights = 1
+        elif mask[torch.argmax(mask)] == torch.sum(mask):
+            prob_weights = self.logits.squeeze()[torch.argmax(mask)]
+        else:
+            prob_weights = F.interpolate(self.logits, grads.shape[:-self.dim], mode="bilinear", align_corners=False)  # TODO: Only works with 2D, cause of bilinear
 
-        positive_gradients = F.relu(torch.mul(logits.exp(), grads))  # TODO: self.logits only works for segmentation otherwise need to take prob of id
-        #positive_gradients = F.relu(10 * grads)  # TODO: self.logits only works for segmentation otherwise need to take prob of id
+        positive_gradients = F.relu(torch.mul(prob_weights.exp(), grads))  # TODO: self.logits only works for segmentation otherwise need to take prob of id
         weights = (alpha * positive_gradients).view(b, k, u * v).sum(-1).view(b, k, 1, 1)
 
         attention_map = (weights * fmaps).sum(1, keepdim=True)
