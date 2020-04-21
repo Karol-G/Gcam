@@ -36,7 +36,7 @@ class GradCAM(_BaseWrapper):
             target_layers = np.asarray(list(self.model.named_modules()))[:, 0]
         elif isinstance(target_layers, str):
             target_layers = [target_layers]
-        self.target_layers = target_layers  # list
+        self.target_layers = target_layers
         self.registered_hooks = {}
         self.dim = dim
         self.registered_only = registered_only
