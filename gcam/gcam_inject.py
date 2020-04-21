@@ -27,10 +27,11 @@ def inject(model, output_dir=None, backend="gcam", layer='auto', input_key=None,
         Path(output_dir).mkdir(parents=True, exist_ok=True)
 
     model.eval()
-    model_backend = copy.deepcopy(model)
-    model_backend, heatmap = _assign_backend(backend, model_backend, layer, postprocessor, retain_graph, dim, registered_only)
+    # Save the original forward of the model
+    # This forward will be called by the backend, so if someone writes a new backend they only need to call model.model_forward and not model.gcam_dict['model_forward']
+    setattr(model, 'model_forward', model.forward)
 
-    # Save every attribute in a dict which is added to the model attributes
+    # Save every other attribute in a dict which is added to the model attributes
     # It is ugly but it avoids name conflicts
     gcam_dict = {}
 
@@ -38,8 +39,6 @@ def inject(model, output_dir=None, backend="gcam", layer='auto', input_key=None,
     gcam_dict['layer'] = layer
     gcam_dict['input_key'] = input_key
     gcam_dict['mask_key'] = mask_key
-    gcam_dict['model_backend'] = model_backend
-    gcam_dict['heatmap'] = heatmap
     gcam_dict['counter'] = 0
     gcam_dict['dim'] = dim
     gcam_dict['save_scores'] = save_scores
@@ -60,6 +59,7 @@ def inject(model, output_dir=None, backend="gcam", layer='auto', input_key=None,
     if output_dir is None and (save_scores is not None or save_maps is not None or save_pickle is not None):
         raise ValueError("output_dir needs to be set if save_scores, save_maps or save_pickle is set to true")
 
+    # Append methods methods to the model
     model.get_layers = types.MethodType(get_layers, model)
     model.get_attention_map = types.MethodType(get_attention_map, model)
     model.save_attention_map = types.MethodType(save_attention_map, model)
@@ -74,6 +74,10 @@ def inject(model, output_dir=None, backend="gcam", layer='auto', input_key=None,
     model._comp_score = types.MethodType(_comp_score, model)
     model._comp_mean_score = types.MethodType(_comp_mean_score, model)
     model._scores2csv = types.MethodType(_scores2csv, model)
+
+    model_backend, heatmap = _assign_backend(backend, model, layer, postprocessor, retain_graph, dim, registered_only)
+    gcam_dict['model_backend'] = model_backend
+    gcam_dict['heatmap'] = heatmap
 
 
 def get_layers(self, reverse=False):

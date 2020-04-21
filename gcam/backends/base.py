@@ -6,13 +6,13 @@ from torch import nn
 
 
 
-class _BaseWrapper(nn.Module):
+class _BaseWrapper():
     """
     Please modify forward() and backward() according to your task.
     """
 
     def __init__(self, model, postprocessor=None, retain_graph=False):
-        super(_BaseWrapper, self).__init__()
+        #super(_BaseWrapper, self).__init__()
         self.device = next(model.parameters()).device
         self.retain_graph = retain_graph
         self.model = model
@@ -29,7 +29,7 @@ class _BaseWrapper(nn.Module):
         Simple classification
         """
         self.model.zero_grad()
-        self.logits = self.model(data)
+        self.logits = self.model.model_forward(data)
         return self.logits
 
     def backward(self, output=None, label=None):

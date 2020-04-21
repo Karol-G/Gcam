@@ -60,7 +60,7 @@ class GradCAM(_BaseWrapper):
             return backward_hook_
 
         # If any candidates are not specified, the hook is registered to all the layers.
-        for name, module in self.model.named_modules():
+        for name, module in model.named_modules():
             if self.target_layers is None or name in self.target_layers:
                 # print("Trying to hook layer: {}".format(name))
                 self.registered_hooks[name] = [False, False]
@@ -85,7 +85,6 @@ class GradCAM(_BaseWrapper):
         for grads in grad_list:
             weight_list.append(self._compute_grad_weights(grads))
         return weight_list
-
 
     def forward(self, data, data_shape):
         self.data_shape = data_shape
