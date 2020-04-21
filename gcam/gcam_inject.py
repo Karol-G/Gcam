@@ -111,7 +111,7 @@ def forward(self, batch, label=None, mask=None):
             if len(attention_map.keys()) == 1:
                 output = torch.tensor(self.gcam_dict['current_attention_map']).unsqueeze(0).unsqueeze(0).to(str(self.gcam_dict['device']))
             else:
-                raise RuntimeError("Not possible to replace output when layer is 'full', only with 'auto' or a manually set layer")
+                raise ValueError("Not possible to replace output when layer is 'full', only with 'auto' or a manually set layer")
         if self.gcam_dict['return_score']:
             return output, scores
         else:
@@ -128,7 +128,7 @@ def _assign_backend(backend, model, target_layers, postprocessor, retain_graph, 
     elif backend == "gcampp":
         return GradCamPP(model=model, target_layers=target_layers, postprocessor=postprocessor, retain_graph=retain_graph, dim=dim), True
     else:
-        raise TypeError("Backend does not exist")
+        raise ValueError("Backend does not exist")
 
 def _unpack_batch(self, batch):
     if self.gcam_dict['input_key'] is None:
