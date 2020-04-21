@@ -18,6 +18,10 @@ import numpy as np
 def inject(model, output_dir=None, backend="gcam", layer='auto', input_key=None, mask_key=None, postprocessor=None,
            retain_graph=False, dim=2, save_scores=False, save_maps=False, save_pickle=False, evaluate=False, metric="wioa",
            return_score=False, threshold=0.3, registered_only=False):
+
+    if _already_injected(model):
+        return
+
     # torch.backends.cudnn.enabled = False # TODO: out of memory
     if output_dir is not None:
         Path(output_dir).mkdir(parents=True, exist_ok=True)
@@ -117,6 +121,13 @@ def forward(self, batch, label=None, mask=None):
         else:
             #output = gradcam_utils.normalize(output) * 255.0
             return output
+
+def _already_injected(model):
+    try:  # try/except is faster than hasattr, if inject method is called repeatedly
+        model.gcam_dict  # Check if attribute exists
+        return True
+    except AttributeError:
+        return False
 
 def _assign_backend(backend, model, target_layers, postprocessor, retain_graph, dim, registered_only):
     if backend == "gbp":
