@@ -27,7 +27,7 @@ class GradCAM(_BaseWrapper):
     """
 
     def __init__(self, model, target_layers=None, postprocessor=None, retain_graph=False, dim=2, registered_only=False):
-        super(GradCAM, self).__init__(model, postprocessor=postprocessor, retain_graph=retain_graph)
+        super(GradCAM, self).__init__(model, postprocessor=postprocessor, retain_graph=retain_graph, dim=dim)
         self.fmap_pool = OrderedDict()
         self.grad_pool = OrderedDict()
         self.module_names = {}
@@ -38,7 +38,6 @@ class GradCAM(_BaseWrapper):
             target_layers = [target_layers]
         self.target_layers = target_layers
         self.registered_hooks = {}
-        self.dim = dim
         self.registered_only = registered_only
 
         def forward_hook(key):
@@ -53,6 +52,7 @@ class GradCAM(_BaseWrapper):
 
         def backward_hook(key):
             def backward_hook_(module, grad_in, grad_out):
+                #print("grad_out: ", grad_out[0].shape)
                 self.registered_hooks[key][1] = True
                 # Save the gradients correspond to the featuremaps
                 self.grad_pool[key] = grad_out[0].detach()
@@ -80,17 +80,11 @@ class GradCAM(_BaseWrapper):
         else:
             return F.adaptive_avg_pool3d(grads, 1)
 
-    def _compute_grad_weights_batch(self, grad_list):
-        weight_list = []
-        for grads in grad_list:
-            weight_list.append(self._compute_grad_weights(grads))
-        return weight_list
-
     def forward(self, data, data_shape):
         self.data_shape = data_shape
         return super(GradCAM, self).forward(data)
 
-    def _auto_layer_selection(self):
+    def _auto_layer_selection(self):  # TODO: Make batch compatible
         # It's ugly but it works ;)
         fmap_list, grad_list = [], []
         module_names = self.layers(reverse=True)
@@ -125,11 +119,14 @@ class GradCAM(_BaseWrapper):
                     counter += 1
 
         if not found_valid_layer:
-            raise ValueError("Could not find a valid layer")
+            raise ValueError("Could not find a valid layer. "
+                             "Check if base.logits or the mask result of base._mask_output() contains only zeros. "
+                             "Check if requires_grad flag is true for the batch input and that no torch.no_grad statements effects gcam. "
+                             "Check if the model has any convolution layers.")
 
         return layer, fmap_list, grad_list
 
-    def generate(self):
+    def generate(self):  # TODO: Make batch compatible
         if self._target_layers == "auto":
             layer, fmaps, grads = self._auto_layer_selection()
             self._check_hooks(layer)
@@ -149,7 +146,7 @@ class GradCAM(_BaseWrapper):
                     attention_maps[layer] = attention_maps_tmp
         return attention_maps
 
-    def _extract_attentions(self, layer):
+    def _extract_attentions(self, layer):  # TODO: Make batch compatible
         fmaps = self._find(self.fmap_pool, layer)
         grads = self._find(self.grad_pool, layer)
         #weights = self._compute_grad_weights(grads)
@@ -160,9 +157,18 @@ class GradCAM(_BaseWrapper):
             attention_maps.append(attention_map)
         return attention_maps
 
-    def _generate_helper(self, fmaps, grads):
+    def _generate_helper(self, fmaps, grads):  # TODO: Make batch compatible
         weights = self._compute_grad_weights(grads)
-        attention_map = torch.mul(fmaps, weights).sum(dim=1, keepdim=True)
+        attention_map = torch.mul(fmaps, weights)
+        # print("attention_map: ", attention_map[0][0][0][0][:10])
+        # print("attention_map: ", attention_map[0][1][0][0][:10])
+        # print("attention_map: ", attention_map[0][2][0][0][:10])
+        # print("attention_map: ", attention_map[0][5][0][0][:10])
+        # print("attention_map: ", attention_map[0][10][0][0][:10])
+        # print("attention_map: ", attention_map[0][11][0][0][:10])
+        #attention_map = attention_map[:, 0, ...].unsqueeze(1)
+        if self.dim == 2:
+            attention_map = attention_map.sum(dim=1, keepdim=True)
         attention_map = F.relu(attention_map)
 
         # print("attention_map.shape: ", attention_map.shape)

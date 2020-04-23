@@ -24,7 +24,7 @@ class Tmp():
 
     def test_gbp_hook(self):
         gcam.inject(self.model, output_dir="results/unet_seg/test_gbp_hook", backend="gbp",
-                     postprocessor="sigmoid", evaluate=True, save_scores=True, save_maps=True, save_pickle=True, metric="wioa", dim=2)
+                     postprocessor="sigmoid", evaluate=True, save_scores=True, save_maps=True, save_pickle=True, metric="wioa", dim=2, label=lambda x: 0.5 < x)
         self.model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
         # TODO: Memory leak finden (Oder nur beim testen?)
@@ -47,7 +47,7 @@ class Tmp():
     def test_gcam_hook(self):
         layer = 'full'
         gcam.inject(self.model, output_dir="results/unet_seg/test_gcam_hook", backend="gcam", layer=layer,
-                                postprocessor="sigmoid", evaluate=True, save_scores=True, save_maps=True, save_pickle=True, metric="wioa", dim=2)
+                                postprocessor="sigmoid", evaluate=True, save_scores=True, save_maps=True, save_pickle=True, metric="wioa", dim=2, registered_only=True, label=lambda x: 0.5 < x)
         self.model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
         # TODO: Memory leak finden (Oder nur beim testen?)
@@ -68,9 +68,9 @@ class Tmp():
         #     shutil.rmtree("results")
 
     def test_ggcam_hook(self):
-        layer = 'full'
+        layer = 'auto'
         gcam.inject(self.model, output_dir="results/unet_seg/test_ggcam_hook", backend="ggcam", layer=layer,
-                                postprocessor="sigmoid", evaluate=True, save_scores=True, save_maps=True, save_pickle=True, metric="wioa", dim=2)
+                                postprocessor="sigmoid", evaluate=True, save_scores=True, save_maps=True, save_pickle=True, metric="wioa", dim=2, registered_only=True, label=lambda x: 0.5 < x)
         self.model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
         # TODO: Memory leak finden (Oder nur beim testen?)
@@ -91,9 +91,9 @@ class Tmp():
         #     shutil.rmtree("results")
 
     def test_gcampp_hook(self):
-        layer = 'full'
+        layer = 'auto'
         gcam.inject(self.model, output_dir="results/unet_seg/test_gcampp_hook", backend="gcampp", layer=layer,
-                     postprocessor="sigmoid", evaluate=True, save_scores=True, save_maps=True, save_pickle=True, metric="wioa", dim=2)
+                     postprocessor="sigmoid", evaluate=True, save_scores=True, save_maps=True, save_pickle=True, metric="wioa", dim=2, registered_only=True, label=lambda x: 0.5 < x)
         self.model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
         # TODO: Memory leak finden (Oder nur beim testen?)
@@ -115,7 +115,7 @@ class Tmp():
 
 if __name__ == '__main__':
     test = Tmp()
-    #test.test_gbp_hook()
+    test.test_gbp_hook()
     #test.test_gcam_hook()
     #test.test_ggcam_hook()
-    test.test_gcampp_hook()
+    #test.test_gcampp_hook()

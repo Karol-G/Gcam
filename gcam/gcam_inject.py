@@ -10,14 +10,14 @@ from gcam.backends.guided_grad_cam import GuidedGradCam
 from gcam.backends.grad_cam_pp import GradCamPP
 from gcam import score_utils
 from collections import defaultdict
-import copy
+from torch.nn import functional as F
 import numpy as np
 
 # TODO: Set requirements in setup.py
 
-def inject(model, output_dir=None, backend="gcam", layer='auto', input_key=None, mask_key=None, postprocessor=None,
-           retain_graph=False, dim=2, save_scores=False, save_maps=False, save_pickle=False, evaluate=False, metric="wioa",
-           return_score=False, threshold=0.3, registered_only=False):
+def inject(model, output_dir=None, backend='gcam', layer='auto', input_key=None, mask_key=None, postprocessor=None,
+           retain_graph=False, dim=2, save_scores=False, save_maps=False, save_pickle=False, evaluate=False, metric='wioa',
+           return_score=False, threshold=0.3, registered_only=False, label=None, channels='default', shape='default'):
 
     if _already_injected(model):
         return
@@ -49,6 +49,9 @@ def inject(model, output_dir=None, backend="gcam", layer='auto', input_key=None,
     gcam_dict['return_score'] = return_score
     gcam_dict['_replace_output'] = False
     gcam_dict['threshold'] = threshold
+    gcam_dict['label'] = label
+    gcam_dict['channels'] = channels
+    gcam_dict['shape'] = shape
     gcam_dict['pickle_maps'] = []
     gcam_dict['scores'] = defaultdict(list)
     gcam_dict['current_attention_map'] = None
@@ -74,6 +77,7 @@ def inject(model, output_dir=None, backend="gcam", layer='auto', input_key=None,
     model._comp_score = types.MethodType(_comp_score, model)
     model._comp_mean_score = types.MethodType(_comp_mean_score, model)
     model._scores2csv = types.MethodType(_scores2csv, model)
+    model._replace_output = types.MethodType(_replace_output, model)
 
     model_backend, heatmap = _assign_backend(backend, model, layer, postprocessor, retain_graph, dim, registered_only)
     gcam_dict['model_backend'] = model_backend
@@ -105,25 +109,20 @@ def dump(self, show=True):
 def forward(self, batch, label=None, mask=None):
     # print("-------------------------- FORWARD GCAM HOOK --------------------------")
     with torch.enable_grad():
-        batch_size, data_shape = self._unpack_batch(batch)
+        batch_size, channels, data_shape = self._unpack_batch(batch)
         output = self.gcam_dict['model_backend'].forward(batch, data_shape)
-        self.gcam_dict['model_backend'].backward(output=output, label=label)  # TODO: Check if I can remove output
+        self.gcam_dict['model_backend'].backward(label=label)
         attention_map = self.gcam_dict['model_backend'].generate()
         if len(attention_map.keys()) == 1:
-            self.gcam_dict['current_attention_map'] = attention_map[list(attention_map.keys())[0]][0]
+            self.gcam_dict['current_attention_map'] = attention_map[list(attention_map.keys())[0]][0]  # TODO: Test with 2D
             #self.gcam_dict['current_attention_map'] = gradcam_utils.normalize(self.gcam_dict['current_attention_map'])*255.0
             #self.gcam_dict['current_attention_map'] = torch.tensor(self.gcam_dict['current_attention_map']).unsqueeze(0).unsqueeze(0).to(str(self.gcam_dict['device']))
             self.gcam_dict['current_layer'] = list(attention_map.keys())[0]
         scores = self._process_attention_maps(attention_map, batch, mask, batch_size)
-        if self.gcam_dict['_replace_output']:
-            if len(attention_map.keys()) == 1:
-                output = torch.tensor(self.gcam_dict['current_attention_map']).unsqueeze(0).unsqueeze(0).to(str(self.gcam_dict['device']))
-            else:
-                raise ValueError("Not possible to replace output when layer is 'full', only with 'auto' or a manually set layer")
+        output = self._replace_output(output, attention_map, data_shape)
         if self.gcam_dict['return_score']:
             return output, scores
         else:
-            #output = gradcam_utils.normalize(output) * 255.0
             return output
 
 def _already_injected(model):
@@ -147,12 +146,14 @@ def _assign_backend(backend, model, target_layers, postprocessor, retain_graph, 
 
 def _unpack_batch(self, batch):
     if self.gcam_dict['input_key'] is None:
-        data_shape = batch.shape[-self.gcam_dict['dim']:]
         batch_size = batch.shape[0]
+        channels = batch.shape[1]
+        data_shape = batch.shape[-self.gcam_dict['dim']:]
     else:
-        data_shape = batch[self.gcam_dict['input_key']].shape[-self.gcam_dict['dim']:]
         batch_size = batch[self.gcam_dict['input_key']].shape[0]
-    return batch_size, data_shape
+        channels = batch[self.gcam_dict['input_key']].shape[1]
+        data_shape = batch[self.gcam_dict['input_key']].shape[-self.gcam_dict['dim']:]
+    return batch_size, channels, data_shape
 
 def _process_attention_maps(self, attention_map, batch, mask, batch_size):
     batch_scores = defaultdict(list) if self.gcam_dict['evaluate'] else None
@@ -207,3 +208,18 @@ def _scores2csv(self, mean_scores):
     df = df.append(new_entry)
     df.insert(0, "Layer", score_ids, True)
     df.to_csv(self.gcam_dict['output_dir'] + "/scores.csv", index=False)
+
+def _replace_output(self, output, attention_map, data_shape):
+    if self.gcam_dict['_replace_output']:
+        if len(attention_map.keys()) == 1:
+            if self.gcam_dict['shape'] == 'default':
+                output_shape = data_shape
+            elif self.gcam_dict['shape'] is not None:
+                output_shape = self.gcam_dict['shape']
+            else:
+                output_shape = None
+            output = torch.tensor(self.gcam_dict['current_attention_map']).to(str(self.gcam_dict['device']))  # TODO: Test with 2D
+            output = gcam_utils.interpolate(output, output_shape)
+        else:
+            raise ValueError("Not possible to replace output when layer is 'full', only with 'auto' or a manually set layer")
+    return output

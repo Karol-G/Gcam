@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.cm as cm
 import nibabel as nib
 import torch
+from torch.nn import functional as F
 
 MIN_SHAPE = (500, 500)
 
@@ -134,3 +135,27 @@ def get_layers(model, reverse=False):
         layer_names.reverse()
 
     return layer_names
+
+def interpolate(data, shape):
+    if isinstance(data, np.ndarray):
+        # Lazy solution, numpy and scipy have multiple interpolate methods with only linear or nearest, so I don't know which one to use...
+        # Should be redone with numpy or scipy though
+        data = torch.tensor(data)
+        data = _interpolate_tensor(data, shape)
+        data = data.numpy()
+    else:
+        data = _interpolate_tensor(data, shape)
+    return data
+
+def _interpolate_tensor(data, shape):
+    if (len(shape) == 2 and len(data.shape) == 2) or ((len(shape) == 3 and len(data.shape) == 3)):  # Add batch and channel dim
+        data = data.unsqueeze(0).unsqueeze(0)
+    elif (len(shape) == 2 and len(data.shape) == 3) or ((len(shape) == 3 and len(data.shape) == 4)):  # Add batch dim
+        data = data.unsqueeze(0)
+    if shape is not None:
+        if len(shape) == 2:
+            data = F.interpolate(data, shape, mode="bilinear", align_corners=False)
+        else:
+            data = F.interpolate(data, shape, mode="trilinear", align_corners=False)
+    return data
+

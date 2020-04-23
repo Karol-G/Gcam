@@ -12,8 +12,7 @@ class GuidedBackPropagation(_BaseWrapper):
     """
 
     def __init__(self, model, postprocessor=None, retain_graph=False, dim=2):
-        super(GuidedBackPropagation, self).__init__(model, postprocessor=postprocessor, retain_graph=retain_graph)
-        self.dim = dim
+        super(GuidedBackPropagation, self).__init__(model, postprocessor=postprocessor, retain_graph=retain_graph, dim=dim)
 
         def backward_hook(module, grad_in, grad_out):
             # Cut off negative gradients
@@ -30,7 +29,7 @@ class GuidedBackPropagation(_BaseWrapper):
     def generate(self):
         attention_map = self.data.grad.clone()
         self.data.grad.zero_()
-        attention_map = torch.mean(attention_map, dim=1)
+        attention_map = torch.mean(attention_map, dim=1)  # TODO: Base on channels given, mean or sum, add channel dim
         attention_map = attention_map.cpu().numpy()
         # if self.dim == 2:
         #     attention_map = attention_map.cpu().numpy().transpose(0, 2, 3, 1)

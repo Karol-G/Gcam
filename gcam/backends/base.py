@@ -2,22 +2,18 @@ import torch
 import numpy as np
 from torch.nn import functional as F
 from gcam import gcam_utils
-from torch import nn
 
 
 
 class _BaseWrapper():
-    """
-    Please modify forward() and backward() according to your task.
-    """
 
-    def __init__(self, model, postprocessor=None, retain_graph=False):
-        #super(_BaseWrapper, self).__init__()
+    def __init__(self, model, postprocessor=None, retain_graph=False, dim=2):
         self.device = next(model.parameters()).device
         self.retain_graph = retain_graph
         self.model = model
-        self.handlers = []  # a set of hook function handlers
+        self.handlers = []
         self.postprocessor = postprocessor
+        self.dim = dim
 
     def _encode_one_hot(self, ids):
         one_hot = torch.zeros_like(self.logits).to(self.device)
@@ -25,19 +21,16 @@ class _BaseWrapper():
         return one_hot
 
     def forward(self, data):
-        """
-        Simple classification
-        """
         self.model.zero_grad()
         self.logits = self.model.model_forward(data)
         return self.logits
 
-    def backward(self, output=None, label=None):
-        if output is not None:
-            self.logits = output
+    def backward(self, label=None):
+        if label is None:
+            label = self.model.gcam_dict['label']
 
-        self.logits = self.post_processing(self.postprocessor, self.logits)
-        self.mask = self._mask_output(output, label)
+        processed_logits = self.post_processing(self.postprocessor, self.logits)
+        self.mask = self._mask_output(processed_logits, label)
 
         if self.mask is None:
             self.logits.backward(gradient=self.logits, retain_graph=self.retain_graph)
@@ -54,21 +47,25 @@ class _BaseWrapper():
         elif callable(postprocessor):
             output = postprocessor(output)
         else:
-            raise ValueError("Postprocessor does not exist")
+            raise ValueError("Postprocessor must be either None, 'sigmoid', 'softmax' or a postprocessor function")
         return output
 
     def _mask_output(self, output, label):
         if label is None:
             return None
-        elif label == "best":
+        elif label == "best":  # Only for classification
             indices = torch.argmax(output).detach().cpu().numpy()
-        elif isinstance(label, int):
+            mask = np.zeros(output.shape)
+            np.put(mask, indices, 1)
+        elif isinstance(label, int):  # Only for classification
             indices = (output == label).nonzero()
-            indices = [index[0] * output.shape[1] + index[1] for index in indices]  # TODO: Not compatible with 3D data
+            indices = [index[0] * output.shape[1] + index[1] for index in indices]
+            mask = np.zeros(output.shape)
+            np.put(mask, indices, 1)
+        elif callable(label):  # Can be used for everything, but is best for segmentation 2D/3D
+            mask = label(output).detach().cpu().numpy()
         else:
-            indices = label(output)
-        mask = np.zeros(output.shape)
-        np.put(mask, indices, 1)
+            raise ValueError("Label must be either None, 'best', a class label index or a discriminator function")
         mask = torch.FloatTensor(mask).to(self.device)
         return mask
 

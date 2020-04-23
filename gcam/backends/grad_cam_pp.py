@@ -2,6 +2,7 @@ import numpy as np
 import torch
 from torch.nn import functional as F
 from gcam.backends.grad_cam import GradCAM
+from gcam import gcam_utils
 
 
 class GradCamPP(GradCAM):
@@ -11,9 +12,8 @@ class GradCamPP(GradCAM):
     Look at Figure 2 on page 4
     """
 
-    def __init__(self, model, target_layers=None, postprocessor=None, retain_graph=False, dim=2):
-        super(GradCamPP, self).__init__(model, target_layers=target_layers, postprocessor=postprocessor, retain_graph=retain_graph)
-        self.dim = dim
+    def __init__(self, model, target_layers=None, postprocessor=None, retain_graph=False, dim=2, registered_only=False):
+        super(GradCamPP, self).__init__(model, target_layers=target_layers, postprocessor=postprocessor, retain_graph=retain_graph, dim=dim, registered_only=registered_only)
 
     def _generate_helper(self, fmaps, grads):
         b, k, u, v = grads.size()
@@ -28,10 +28,10 @@ class GradCamPP(GradCAM):
         mask = self.mask.squeeze()
         if self.mask is None:
             prob_weights = 1
-        elif mask[torch.argmax(mask)] == torch.sum(mask):
+        elif len(mask.shape) == 1:
             prob_weights = self.logits.squeeze()[torch.argmax(mask)]
         else:
-            prob_weights = F.interpolate(self.logits, grads.shape[:-self.dim], mode="bilinear", align_corners=False)  # TODO: Only works with 2D, cause of bilinear
+            prob_weights = gcam_utils.interpolate(self.logits, grads.shape[:-self.dim])
 
         positive_gradients = F.relu(torch.mul(prob_weights.exp(), grads))  # TODO: self.logits only works for segmentation otherwise need to take prob of id
         weights = (alpha * positive_gradients).view(b, k, u * v).sum(-1).view(b, k, 1, 1)
