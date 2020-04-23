@@ -7,13 +7,12 @@ from gcam import gcam_utils
 
 class _BaseWrapper():
 
-    def __init__(self, model, postprocessor=None, retain_graph=False, dim=2):
+    def __init__(self, model, postprocessor=None, retain_graph=False):
         self.device = next(model.parameters()).device
         self.retain_graph = retain_graph
         self.model = model
         self.handlers = []
         self.postprocessor = postprocessor
-        self.dim = dim
 
     def _encode_one_hot(self, ids):
         one_hot = torch.zeros_like(self.logits).to(self.device)
@@ -21,6 +20,7 @@ class _BaseWrapper():
         return one_hot
 
     def forward(self, data):
+        self._extract_metadata(data)
         self.model.zero_grad()
         self.logits = self.model.model_forward(data)
         return self.logits
@@ -68,6 +68,18 @@ class _BaseWrapper():
             raise ValueError("Label must be either None, 'best', a class label index or a discriminator function")
         mask = torch.FloatTensor(mask).to(self.device)
         return mask
+
+    def _extract_metadata(self, data):
+        self.dim = len(data.shape[2:])
+        self.batch_size = data.shape[0]
+        if self.model.gcam_dict['channels'] == 'default':
+            self.channels = data.shape[1]
+        else:
+            self.channels = self.model.gcam_dict['channels']
+        if self.model.gcam_dict['data_shape'] == 'default':
+            self.data_shape = data.shape[2:]
+        else:
+            self.data_shape = self.model.gcam_dict['data_shape']
 
     def generate(self):
         raise NotImplementedError

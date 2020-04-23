@@ -26,8 +26,8 @@ class GradCAM(_BaseWrapper):
     Look at Figure 2 on page 4
     """
 
-    def __init__(self, model, target_layers=None, postprocessor=None, retain_graph=False, dim=2, registered_only=False):
-        super(GradCAM, self).__init__(model, postprocessor=postprocessor, retain_graph=retain_graph, dim=dim)
+    def __init__(self, model, target_layers=None, postprocessor=None, retain_graph=False, registered_only=False):
+        super(GradCAM, self).__init__(model, postprocessor=postprocessor, retain_graph=retain_graph)
         self.fmap_pool = OrderedDict()
         self.grad_pool = OrderedDict()
         self.module_names = {}
@@ -75,48 +75,53 @@ class GradCAM(_BaseWrapper):
             raise ValueError("Invalid layer name: {}".format(target_layer))
 
     def _compute_grad_weights(self, grads):
-        if self.dim == 2:
+        if len(self.data_shape) == 2:
             return F.adaptive_avg_pool2d(grads, 1)
         else:
             return F.adaptive_avg_pool3d(grads, 1)
 
-    def forward(self, data, data_shape):
-        self.data_shape = data_shape
+    def forward(self, data):
         return super(GradCAM, self).forward(data)
 
-    def _auto_layer_selection(self):  # TODO: Make batch compatible
+    def generate(self):
+        if self._target_layers == "auto":
+            layer, fmaps, grads = self._auto_layer_selection()
+            self._check_hooks(layer)
+            attention_map = self._generate_helper(fmaps, grads).cpu().numpy()
+            attention_maps = {layer: attention_map}
+        else:
+            attention_maps = {}
+            for layer in self.target_layers:
+                if not self.registered_only:
+                    self._check_hooks(layer)
+                if self.registered_hooks[layer][0] and self.registered_hooks[layer][1]:
+                    attention_maps[layer] = self._extract_attentions(str(layer)).cpu().numpy()
+        return attention_maps
+
+    def _auto_layer_selection(self):
         # It's ugly but it works ;)
-        fmap_list, grad_list = [], []
         module_names = self.layers(reverse=True)
         found_valid_layer = False
 
-        for i in range(self.logits.shape[0]):
-            counter = 0
-            for layer in module_names:
-                try:
-                    fmaps = self._find(self.fmap_pool, layer)[i]  # If an exception is raised, remove [i] and decomment line "np.shape(fmaps)" and "fmaps = fmaps[i]"
-                    # np.shape(fmaps)
-                    # fmaps = fmaps[i]
-                    grads = self._find(self.grad_pool, layer)[i]
-                    nonzeros = np.count_nonzero(grads.detach().cpu().numpy())
-                    self._compute_grad_weights(grads)
-                    if nonzeros == 0 or not isinstance(fmaps, torch.Tensor) or not isinstance(grads, torch.Tensor):
-                        counter += 1
-                        continue
-                    print("Dismissed the last {} module layers (Note: This number can be inflated if the model contains many nested module layers)".format(counter))
-                    print("Selected module layer: {}".format(layer))
-                    fmap_list.append(self._find(self.fmap_pool, layer)[i])
-                    grads = self._find(self.grad_pool, layer)[i]
-                    #weight_list.append(self._compute_grad_weights(grads))
-                    grad_list.append(grads)
-                    found_valid_layer = True
-                    break
-                except ValueError:
+        counter = 0
+        for layer in module_names:
+            try:
+                fmaps = self._find(self.fmap_pool, layer)
+                grads = self._find(self.grad_pool, layer)
+                nonzeros = np.count_nonzero(grads.detach().cpu().numpy())
+                self._compute_grad_weights(grads)
+                if nonzeros == 0 or not isinstance(fmaps, torch.Tensor) or not isinstance(grads, torch.Tensor):
                     counter += 1
-                except RuntimeError:
-                    counter += 1
-                except IndexError:
-                    counter += 1
+                    continue
+                print("Selected module layer: {}".format(layer))
+                found_valid_layer = True
+                break
+            except ValueError:
+                counter += 1
+            except RuntimeError:
+                counter += 1
+            except IndexError:
+                counter += 1
 
         if not found_valid_layer:
             raise ValueError("Could not find a valid layer. "
@@ -124,74 +129,34 @@ class GradCAM(_BaseWrapper):
                              "Check if requires_grad flag is true for the batch input and that no torch.no_grad statements effects gcam. "
                              "Check if the model has any convolution layers.")
 
-        return layer, fmap_list, grad_list
+        return layer, fmaps, grads
 
-    def generate(self):  # TODO: Make batch compatible
-        if self._target_layers == "auto":
-            layer, fmaps, grads = self._auto_layer_selection()
-            self._check_hooks(layer)
-            attention_maps = []
-            for i in range(self.logits.shape[0]):
-                attention_map = self._generate_helper(fmaps[i].unsqueeze(0), grads[i].unsqueeze(0))
-                attention_map = attention_map.squeeze().cpu().numpy()
-                attention_maps.append(attention_map)
-            attention_maps = {layer: attention_maps}
-        else:
-            attention_maps = {}
-            for layer in self.target_layers:
-                if not self.registered_only:
-                    self._check_hooks(layer)
-                if self.registered_hooks[layer][0] and self.registered_hooks[layer][1]:
-                    attention_maps_tmp = self._extract_attentions(str(layer))
-                    attention_maps[layer] = attention_maps_tmp
-        return attention_maps
-
-    def _extract_attentions(self, layer):  # TODO: Make batch compatible
+    def _extract_attentions(self, layer):
         fmaps = self._find(self.fmap_pool, layer)
         grads = self._find(self.grad_pool, layer)
-        #weights = self._compute_grad_weights(grads)
-        gcam_tensor = self._generate_helper(fmaps, grads)
-        attention_maps = []
-        for i in range(self.logits.shape[0]):
-            attention_map = gcam_tensor[i].squeeze().cpu().numpy()
-            attention_maps.append(attention_map)
-        return attention_maps
+        attention_map = self._generate_helper(fmaps, grads)
+        return attention_map
 
     def _generate_helper(self, fmaps, grads):  # TODO: Make batch compatible
         weights = self._compute_grad_weights(grads)
         attention_map = torch.mul(fmaps, weights)
-        # print("attention_map: ", attention_map[0][0][0][0][:10])
-        # print("attention_map: ", attention_map[0][1][0][0][:10])
-        # print("attention_map: ", attention_map[0][2][0][0][:10])
-        # print("attention_map: ", attention_map[0][5][0][0][:10])
-        # print("attention_map: ", attention_map[0][10][0][0][:10])
-        # print("attention_map: ", attention_map[0][11][0][0][:10])
         #attention_map = attention_map[:, 0, ...].unsqueeze(1)
-        if self.dim == 2:
-            attention_map = attention_map.sum(dim=1, keepdim=True)
+        B, _, *data_shape = attention_map.shape
+        attention_map = attention_map.view(B, self.channels, -1, *data_shape)
+        attention_map = torch.sum(attention_map, dim=2)  # TODO: mean or sum?
         attention_map = F.relu(attention_map)
+        attention_map = self._normalize(attention_map)
+        return attention_map
 
-        # print("attention_map.shape: ", attention_map.shape)
-        # print("self.image_shape: ", self.image_shape)
-        # attention_map = F.interpolate(
-        #     attention_map, self.image_shape, mode="bilinear", align_corners=False
-        # )
-        # print("attention_map.shape: ", attention_map)
-
-        # B, C, H, W = attention_map.shape
-        # attention_map = attention_map.view(B, -1)
-        # attention_map -= attention_map.min(dim=1, keepdim=True)[0]
-        # attention_map /= attention_map.max(dim=1, keepdim=True)[0]
-        # attention_map = attention_map.view(B, C, H, W)
-
-        B, *map_shape = attention_map.shape
-        attention_map = attention_map.view(B, -1)
-        attention_map_min = attention_map.min(dim=1, keepdim=True)[0]  # TODO: Make compatible i´with batch size bigger 1
-        attention_map_max = attention_map.max(dim=1, keepdim=True)[0]  # TODO: Make compatible i´with batch size bigger 1
+    def _normalize(self, attention_map):
+        # TODO: Normalize over entire data or over every channel?
+        B, C, *data_shape = attention_map.shape
+        attention_map = attention_map.view(B, C, -1)
+        attention_map_min = torch.min(attention_map, dim=2, keepdim=True)[0]
+        attention_map_max = torch.max(attention_map, dim=2, keepdim=True)[0]
         attention_map -= attention_map_min
         attention_map /= (attention_map_max - attention_map_min)
-        attention_map = attention_map.view(B, *map_shape)
-
+        attention_map = attention_map.view(B, C, *data_shape)
         return attention_map
 
     def _check_hooks(self, layer):

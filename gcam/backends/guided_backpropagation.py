@@ -11,8 +11,8 @@ class GuidedBackPropagation(_BaseWrapper):
     Look at Figure 1 on page 8.
     """
 
-    def __init__(self, model, postprocessor=None, retain_graph=False, dim=2):
-        super(GuidedBackPropagation, self).__init__(model, postprocessor=postprocessor, retain_graph=retain_graph, dim=dim)
+    def __init__(self, model, postprocessor=None, retain_graph=False):
+        super(GuidedBackPropagation, self).__init__(model, postprocessor=postprocessor, retain_graph=retain_graph)
 
         def backward_hook(module, grad_in, grad_out):
             # Cut off negative gradients
@@ -22,21 +22,17 @@ class GuidedBackPropagation(_BaseWrapper):
         for module in self.model.named_modules():
             self.handlers.append(module[1].register_backward_hook(backward_hook))
 
-    def forward(self, data, data_shape):
+    def forward(self, data):
         self.data = data.requires_grad_()
         return super(GuidedBackPropagation, self).forward(self.data)
 
     def generate(self):
         attention_map = self.data.grad.clone()
         self.data.grad.zero_()
-        attention_map = torch.mean(attention_map, dim=1)  # TODO: Base on channels given, mean or sum, add channel dim
+        B, _, *data_shape = attention_map.shape
+        attention_map = attention_map.view(B, self.channels, -1, *data_shape)
+        attention_map = torch.mean(attention_map, dim=2)  # TODO: mean or sum?
         attention_map = attention_map.cpu().numpy()
-        # if self.dim == 2:
-        #     attention_map = attention_map.cpu().numpy().transpose(0, 2, 3, 1)
-        # else:
-        #     attention_map = attention_map.cpu().numpy().transpose(0, 2, 3, 4, 1)
-        # attention_map = np.mean(attention_map, axis=3)
-        # attention_map = torch.mean(attention_map, dim=1)
         attention_maps = {}
         attention_maps[""] = attention_map
         return attention_maps

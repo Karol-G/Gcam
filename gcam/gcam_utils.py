@@ -7,7 +7,8 @@ from torch.nn import functional as F
 
 MIN_SHAPE = (500, 500)
 
-def save_attention_map(filename, attention_map, heatmap, dim, data=None):
+def save_attention_map(filename, attention_map, heatmap, data=None):
+    dim = len(attention_map.shape)
     attention_map = normalize(attention_map)
     attention_map = generate_attention_map(attention_map, heatmap, dim, data)
     _save_file(filename, attention_map, dim)
@@ -138,7 +139,7 @@ def get_layers(model, reverse=False):
 
 def interpolate(data, shape):
     if isinstance(data, np.ndarray):
-        # Lazy solution, numpy and scipy have multiple interpolate methods with only linear or nearest, so I don't know which one to use...
+        # Lazy solution, numpy and scipy have multiple interpolate methods with only linear or nearest, so I don't know which one to use... + they don't work with batches
         # Should be redone with numpy or scipy though
         data = torch.tensor(data)
         data = _interpolate_tensor(data, shape)
@@ -152,10 +153,9 @@ def _interpolate_tensor(data, shape):
         data = data.unsqueeze(0).unsqueeze(0)
     elif (len(shape) == 2 and len(data.shape) == 3) or ((len(shape) == 3 and len(data.shape) == 4)):  # Add batch dim
         data = data.unsqueeze(0)
-    if shape is not None:
-        if len(shape) == 2:
-            data = F.interpolate(data, shape, mode="bilinear", align_corners=False)
-        else:
-            data = F.interpolate(data, shape, mode="trilinear", align_corners=False)
+    if len(shape) == 2:
+        data = F.interpolate(data, shape, mode="bilinear", align_corners=False)
+    else:
+        data = F.interpolate(data, shape, mode="trilinear", align_corners=False)
     return data
 

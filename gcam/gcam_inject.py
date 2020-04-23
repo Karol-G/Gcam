@@ -16,8 +16,8 @@ import numpy as np
 # TODO: Set requirements in setup.py
 
 def inject(model, output_dir=None, backend='gcam', layer='auto', input_key=None, mask_key=None, postprocessor=None,
-           retain_graph=False, dim=2, save_scores=False, save_maps=False, save_pickle=False, evaluate=False, metric='wioa',
-           return_score=False, threshold=0.3, registered_only=False, label=None, channels='default', shape='default'):
+           retain_graph=False, save_scores=False, save_maps=False, save_pickle=False, evaluate=False, metric='wioa',
+           return_score=False, threshold=0.3, registered_only=False, label=None, channels='default', data_shape='default'):
 
     if _already_injected(model):
         return
@@ -40,7 +40,6 @@ def inject(model, output_dir=None, backend='gcam', layer='auto', input_key=None,
     gcam_dict['input_key'] = input_key
     gcam_dict['mask_key'] = mask_key
     gcam_dict['counter'] = 0
-    gcam_dict['dim'] = dim
     gcam_dict['save_scores'] = save_scores
     gcam_dict['save_maps'] = save_maps
     gcam_dict['save_pickle'] = save_pickle
@@ -51,7 +50,7 @@ def inject(model, output_dir=None, backend='gcam', layer='auto', input_key=None,
     gcam_dict['threshold'] = threshold
     gcam_dict['label'] = label
     gcam_dict['channels'] = channels
-    gcam_dict['shape'] = shape
+    gcam_dict['data_shape'] = data_shape
     gcam_dict['pickle_maps'] = []
     gcam_dict['scores'] = defaultdict(list)
     gcam_dict['current_attention_map'] = None
@@ -78,8 +77,9 @@ def inject(model, output_dir=None, backend='gcam', layer='auto', input_key=None,
     model._comp_mean_score = types.MethodType(_comp_mean_score, model)
     model._scores2csv = types.MethodType(_scores2csv, model)
     model._replace_output = types.MethodType(_replace_output, model)
+    model._extract_metadata = types.MethodType(_extract_metadata, model)
 
-    model_backend, heatmap = _assign_backend(backend, model, layer, postprocessor, retain_graph, dim, registered_only)
+    model_backend, heatmap = _assign_backend(backend, model, layer, postprocessor, retain_graph, registered_only)
     gcam_dict['model_backend'] = model_backend
     gcam_dict['heatmap'] = heatmap
 
@@ -92,7 +92,7 @@ def get_attention_map(self):
 
 def save_attention_map(self, attention_map):
     gcam_utils.save_attention_map(filename=self.gcam_dict['output_dir'] + "/" + self.gcam_dict['current_layer'] + "/attention_map_" +
-                                           str(self.gcam_dict['counter']), attention_map=attention_map, heatmap=self.gcam_dict['heatmap'], dim=self.gcam_dict['dim'])
+                                           str(self.gcam_dict['counter']), attention_map=attention_map, heatmap=self.gcam_dict['heatmap'])
     self.gcam_dict['counter'] += 1
 
 def replace_output(self, replace):
@@ -110,15 +110,13 @@ def forward(self, batch, label=None, mask=None):
     # print("-------------------------- FORWARD GCAM HOOK --------------------------")
     with torch.enable_grad():
         batch_size, channels, data_shape = self._unpack_batch(batch)
-        output = self.gcam_dict['model_backend'].forward(batch, data_shape)
+        output = self.gcam_dict['model_backend'].forward(batch)
         self.gcam_dict['model_backend'].backward(label=label)
         attention_map = self.gcam_dict['model_backend'].generate()
         if len(attention_map.keys()) == 1:
-            self.gcam_dict['current_attention_map'] = attention_map[list(attention_map.keys())[0]][0]  # TODO: Test with 2D
-            #self.gcam_dict['current_attention_map'] = gradcam_utils.normalize(self.gcam_dict['current_attention_map'])*255.0
-            #self.gcam_dict['current_attention_map'] = torch.tensor(self.gcam_dict['current_attention_map']).unsqueeze(0).unsqueeze(0).to(str(self.gcam_dict['device']))
+            self.gcam_dict['current_attention_map'] = attention_map[list(attention_map.keys())[0]]
             self.gcam_dict['current_layer'] = list(attention_map.keys())[0]
-        scores = self._process_attention_maps(attention_map, batch, mask, batch_size)
+        scores = self._process_attention_maps(attention_map, batch, mask, batch_size, channels)
         output = self._replace_output(output, attention_map, data_shape)
         if self.gcam_dict['return_score']:
             return output, scores
@@ -132,30 +130,26 @@ def _already_injected(model):
     except AttributeError:
         return False
 
-def _assign_backend(backend, model, target_layers, postprocessor, retain_graph, dim, registered_only):
+def _assign_backend(backend, model, target_layers, postprocessor, retain_graph, registered_only):
     if backend == "gbp":
-        return GuidedBackPropagation(model=model, postprocessor=postprocessor, retain_graph=retain_graph, dim=dim), False
+        return GuidedBackPropagation(model=model, postprocessor=postprocessor, retain_graph=retain_graph), False
     elif backend == "gcam":
-        return GradCAM(model=model, target_layers=target_layers, postprocessor=postprocessor, retain_graph=retain_graph, dim=dim, registered_only=registered_only), True
+        return GradCAM(model=model, target_layers=target_layers, postprocessor=postprocessor, retain_graph=retain_graph, registered_only=registered_only), True
     elif backend == "ggcam":
-        return GuidedGradCam(model=model, target_layers=target_layers, postprocessor=postprocessor, retain_graph=retain_graph, dim=dim), False
+        return GuidedGradCam(model=model, target_layers=target_layers, postprocessor=postprocessor, retain_graph=retain_graph), False
     elif backend == "gcampp":
-        return GradCamPP(model=model, target_layers=target_layers, postprocessor=postprocessor, retain_graph=retain_graph, dim=dim), True
+        return GradCamPP(model=model, target_layers=target_layers, postprocessor=postprocessor, retain_graph=retain_graph), True
     else:
         raise ValueError("Backend does not exist")
 
 def _unpack_batch(self, batch):
     if self.gcam_dict['input_key'] is None:
-        batch_size = batch.shape[0]
-        channels = batch.shape[1]
-        data_shape = batch.shape[-self.gcam_dict['dim']:]
+        batch_size, channels, data_shape = self._extract_metadata(batch)
     else:
-        batch_size = batch[self.gcam_dict['input_key']].shape[0]
-        channels = batch[self.gcam_dict['input_key']].shape[1]
-        data_shape = batch[self.gcam_dict['input_key']].shape[-self.gcam_dict['dim']:]
+        batch_size, channels, data_shape = self._extract_metadata(batch[self.gcam_dict['input_key']])
     return batch_size, channels, data_shape
 
-def _process_attention_maps(self, attention_map, batch, mask, batch_size):
+def _process_attention_maps(self, attention_map, batch, mask, batch_size, channels):
     batch_scores = defaultdict(list) if self.gcam_dict['evaluate'] else None
     for layer_name in attention_map.keys():
         layer_output_dir = None
@@ -166,21 +160,22 @@ def _process_attention_maps(self, attention_map, batch, mask, batch_size):
                 layer_output_dir = self.gcam_dict['output_dir'] + "/" + layer_name
             Path(layer_output_dir).mkdir(parents=True, exist_ok=True)
         for j in range(batch_size):
-            attention_map_j = attention_map[layer_name][j]
-            self._save_file(attention_map_j, layer_output_dir)
-            if self.gcam_dict['evaluate']:
-                if mask is None:
-                    raise ValueError("Mask cannot be none in evaluation mode")
-                score = self._comp_score(attention_map_j, batch, mask[j].squeeze())
-                batch_scores[layer_name].append(score)
-                self.gcam_dict['scores'][layer_name].append(score)
+            for k in range(channels):
+                attention_map_single = attention_map[layer_name][j][k]
+                self._save_file(attention_map_single, layer_output_dir)
+                if self.gcam_dict['evaluate']:
+                    if mask is None:
+                        raise ValueError("Mask cannot be none in evaluation mode")
+                    score = self._comp_score(attention_map_single, batch, mask[j][k].squeeze())
+                    batch_scores[layer_name].append(score)
+                    self.gcam_dict['scores'][layer_name].append(score)
     return batch_scores
 
 def _save_attention_map(self, attention_map, layer_output_dir):
     if self.gcam_dict['save_pickle']:
         self.gcam_dict['pickle_maps'].append(attention_map)
     if self.gcam_dict['save_maps']:
-        gcam_utils.save_attention_map(filename=layer_output_dir + "/attention_map_" + str(self.gcam_dict['counter']), attention_map=attention_map, heatmap=self.gcam_dict['heatmap'], dim=self.gcam_dict['dim'])
+        gcam_utils.save_attention_map(filename=layer_output_dir + "/attention_map_" + str(self.gcam_dict['counter']), attention_map=attention_map, heatmap=self.gcam_dict['heatmap'])
         self.gcam_dict['counter'] += 1
 
 def _comp_score(self, attention_map, batch, mask):  # TODO: Not multiclass compatible, maybe multiclass parameter in init?
@@ -212,14 +207,24 @@ def _scores2csv(self, mean_scores):
 def _replace_output(self, output, attention_map, data_shape):
     if self.gcam_dict['_replace_output']:
         if len(attention_map.keys()) == 1:
-            if self.gcam_dict['shape'] == 'default':
+            if self.gcam_dict['data_shape'] == 'default':
                 output_shape = data_shape
-            elif self.gcam_dict['shape'] is not None:
-                output_shape = self.gcam_dict['shape']
             else:
-                output_shape = None
+                output_shape = self.gcam_dict['data_shape']
             output = torch.tensor(self.gcam_dict['current_attention_map']).to(str(self.gcam_dict['device']))  # TODO: Test with 2D
             output = gcam_utils.interpolate(output, output_shape)
         else:
             raise ValueError("Not possible to replace output when layer is 'full', only with 'auto' or a manually set layer")
     return output
+
+def _extract_metadata(self, batch):
+    batch_size = batch.shape[0]
+    if self.gcam_dict['channels'] == 'default':
+        channels = batch.shape[1]
+    else:
+        channels = self.gcam_dict['channels']
+    if self.gcam_dict['data_shape'] == 'default':
+        data_shape = batch.shape[2:]
+    else:
+        data_shape = self.model.gcam_dict['data_shape']
+    return batch_size, channels, data_shape
