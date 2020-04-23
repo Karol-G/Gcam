@@ -108,7 +108,7 @@ class GradCAM(_BaseWrapper):
             try:
                 fmaps = self._find(self.fmap_pool, layer)
                 grads = self._find(self.grad_pool, layer)
-                nonzeros = np.count_nonzero(grads.detach().cpu().numpy())
+                nonzeros = np.count_nonzero(grads.detach().cpu().numpy())  # TODO: Add except here with description, replace nonzero with sum == 0?
                 self._compute_grad_weights(grads)
                 if nonzeros == 0 or not isinstance(fmaps, torch.Tensor) or not isinstance(grads, torch.Tensor):
                     counter += 1
@@ -137,10 +137,9 @@ class GradCAM(_BaseWrapper):
         attention_map = self._generate_helper(fmaps, grads)
         return attention_map
 
-    def _generate_helper(self, fmaps, grads):  # TODO: Make batch compatible
+    def _generate_helper(self, fmaps, grads):
         weights = self._compute_grad_weights(grads)
         attention_map = torch.mul(fmaps, weights)
-        #attention_map = attention_map[:, 0, ...].unsqueeze(1)
         B, _, *data_shape = attention_map.shape
         attention_map = attention_map.view(B, self.channels, -1, *data_shape)
         attention_map = torch.sum(attention_map, dim=2)  # TODO: mean or sum?
@@ -149,7 +148,7 @@ class GradCAM(_BaseWrapper):
         return attention_map
 
     def _normalize(self, attention_map):
-        # TODO: Normalize over entire data or over every channel?
+        # Normalization per channel
         B, C, *data_shape = attention_map.shape
         attention_map = attention_map.view(B, C, -1)
         attention_map_min = torch.min(attention_map, dim=2, keepdim=True)[0]
@@ -160,7 +159,6 @@ class GradCAM(_BaseWrapper):
         return attention_map
 
     def _check_hooks(self, layer):
-        # TODO: Needs to be added to _BaseWrapper as other backends have also a generate method
         if not self.registered_hooks[layer][0] and not self.registered_hooks[layer][1]:
             raise ValueError("Neither forward hook nor backward hook did register to layer: " + str(layer))
         elif not self.registered_hooks[layer][0]:

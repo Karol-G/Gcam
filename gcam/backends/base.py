@@ -20,9 +20,9 @@ class _BaseWrapper():
         return one_hot
 
     def forward(self, data):
-        self._extract_metadata(data)
         self.model.zero_grad()
         self.logits = self.model.model_forward(data)
+        self._extract_metadata(self.logits)
         return self.logits
 
     def backward(self, label=None):
@@ -69,7 +69,7 @@ class _BaseWrapper():
         mask = torch.FloatTensor(mask).to(self.device)
         return mask
 
-    def _extract_metadata(self, data):
+    def _extract_metadata(self, data):  # TODO: Does not work for classification output (shape: (1, 1000)), merge with the one in gcam_inject
         self.dim = len(data.shape[2:])
         self.batch_size = data.shape[0]
         if self.model.gcam_dict['channels'] == 'default':
