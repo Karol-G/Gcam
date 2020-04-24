@@ -11,7 +11,7 @@ def get_layers(model, reverse=False):
     return gcam_utils.get_layers(model, reverse)
 
 
-def compute_score(attention_map, mask, metric="wioa", threshold=0.3):
+def compute_score(attention_map, mask, metric="wioa", threshold=0.0):
     return score_utils.comp_score(attention_map, mask, metric, threshold)
 
 def save(attention_map, filename, heatmap):

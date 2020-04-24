@@ -36,11 +36,11 @@ def generate_gcam2d(attention_map, data=None):
     if data is not None:
         data = _load_data(data)
         attention_map = _resize_attention_map(attention_map, data.shape[:2])
-        cmap = cm.jet_r(attention_map)[..., :3] * 255.0  # TODO: Still bugged with batch dim
-        attention_map = (cmap.astype(np.float) + data.astype(np.float)) / 2  # TODO: Still bugged with batch dim
+        cmap = cm.jet_r(attention_map)[..., :3] * 255.0
+        attention_map = (cmap.astype(np.float) + data.astype(np.float)) / 2
     else:
         attention_map = _resize_attention_map(attention_map, MIN_SHAPE)
-        attention_map = cm.jet_r(attention_map)[..., :3] * 255.0  # TODO: Still bugged with batch dim
+        attention_map = cm.jet_r(attention_map)[..., :3] * 255.0
     return np.uint8(attention_map)
 
 def generate_guided_bp2d(attention_map):
@@ -60,11 +60,11 @@ def generate_gcam3d(attention_map, data=None):
 
     if data is not None:
         attention_map = _resize_attention_map(attention_map, data.shape[:3])
-        cmap = cm.jet_r(attention_map)[..., :3] * 255.0  # TODO: Still bugged with batch dim
-        attention_map = (cmap.astype(np.float) + data.astype(np.float)) / 2  # TODO: Still bugged with batch dim
+        cmap = cm.jet_r(attention_map)[..., :3] * 255.0
+        attention_map = (cmap.astype(np.float) + data.astype(np.float)) / 2
     else:
         # attention_map = _resize_attention_map(attention_map, MIN_SHAPE)
-        #attention_map = cm.jet_r(attention_map)[..., :3] * 255.0  # TODO: Still bugged with batch dim
+        #attention_map = cm.jet_r(attention_map)[..., :3] * 255.0
         attention_map *= 255.0
     return np.uint8(attention_map)
 
@@ -137,25 +137,33 @@ def get_layers(model, reverse=False):
 
     return layer_names
 
-def interpolate(data, shape):
+def interpolate(data, shape, squeeze=False):
     if isinstance(data, np.ndarray):
         # Lazy solution, numpy and scipy have multiple interpolate methods with only linear or nearest, so I don't know which one to use... + they don't work with batches
         # Should be redone with numpy or scipy though
-        data = torch.tensor(data)
-        data = _interpolate_tensor(data, shape)
-        data = data.numpy()
+        data_type = data.dtype
+        data = torch.FloatTensor(data)
+        data = _interpolate_tensor(data, shape, squeeze)
+        data = data.numpy().astype(data_type)
+    elif isinstance(data, torch.Tensor):
+        data = _interpolate_tensor(data, shape, squeeze)
     else:
-        data = _interpolate_tensor(data, shape)
+        raise ValueError("Unsupported data type for interpolation")
     return data
 
-def _interpolate_tensor(data, shape):
+def _interpolate_tensor(data, shape, squeeze):
     if (len(shape) == 2 and len(data.shape) == 2) or ((len(shape) == 3 and len(data.shape) == 3)):  # Add batch and channel dim
         data = data.unsqueeze(0).unsqueeze(0)
+        _squeeze = 2
     elif (len(shape) == 2 and len(data.shape) == 3) or ((len(shape) == 3 and len(data.shape) == 4)):  # Add batch dim
         data = data.unsqueeze(0)
+        _squeeze = 1
     if len(shape) == 2:
         data = F.interpolate(data, shape, mode="bilinear", align_corners=False)
     else:
         data = F.interpolate(data, shape, mode="trilinear", align_corners=False)
+    if squeeze:  # Remove unnecessary dims
+        for i in range(_squeeze):
+            data = data.squeeze(0)
     return data
 

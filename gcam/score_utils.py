@@ -2,8 +2,9 @@ import numpy as np
 import torch
 import cv2
 import copy
+from gcam import gcam_utils
 
-def comp_score(attention_map, mask, metric="wioa", threshold=0.3):
+def comp_score(attention_map, mask, metric="wioa", threshold=0.0):
     if isinstance(mask, torch.Tensor):
         mask = mask.detach().cpu().numpy()
     else:
@@ -27,7 +28,8 @@ def comp_score(attention_map, mask, metric="wioa", threshold=0.3):
     return score
 
 def _preprocessing(attention_map, mask, attention_threshold):
-    attention_map = _resize_attention_map(attention_map, mask.shape)
+    attention_map = gcam_utils.interpolate(attention_map, mask.shape, squeeze=True)
+    attention_map = gcam_utils.normalize(attention_map.astype(np.float))
     weights = copy.deepcopy(attention_map)
     mask = np.array(mask, dtype=int)
     attention_map[attention_map < attention_threshold] = 0
@@ -35,14 +37,15 @@ def _preprocessing(attention_map, mask, attention_threshold):
     attention_map = np.array(attention_map, dtype=int)
     return attention_map, mask, weights
 
-def _resize_attention_map(attention_map, target_shape):
-    return cv2.resize(attention_map, tuple(np.flip(target_shape)))
-
 def _intersection_over_attention(binary_attention_map, mask, weights):
     intersection = binary_attention_map & mask
+    tmp1 = np.sum(intersection)
     if weights is not None:
         intersection = intersection.astype(np.float) * weights
+        tmp2 = np.sum(intersection)
         binary_attention_map = binary_attention_map.astype(np.float) * weights
+    tmp3 = np.sum(binary_attention_map)
+    tmp4 = np.sum(mask)
     ioa = np.sum(intersection) / np.sum(binary_attention_map)
     return ioa
 
