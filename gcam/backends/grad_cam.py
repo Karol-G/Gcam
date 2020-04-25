@@ -4,19 +4,19 @@ import torch
 from torch.nn import functional as F
 from gcam.backends.base import _BaseWrapper
 
-def detach_output(output):  # TODO: Is this needed? Is this correct?
-    if not isinstance(output, torch.Tensor):
-        tuple_list = []
-        if hasattr(output, '__iter__'):
-            for item in output:
-                if isinstance(output, torch.Tensor):
-                    tuple_list.append(item.detach())
-                else:
-                    tuple_list.append(detach_output(item))
-            return tuple_list
-        else:
-            return output
-    return output.detach()
+# def detach_output(output):  # TODO: Is this needed? Is this correct?
+#     if not isinstance(output, torch.Tensor):
+#         tuple_list = []
+#         if hasattr(output, '__iter__'):
+#             for item in output:
+#                 if isinstance(output, torch.Tensor):
+#                     tuple_list.append(item.detach())
+#                 else:
+#                     tuple_list.append(detach_output(item))
+#             return tuple_list
+#         else:
+#             return output
+#     return output.detach()
 
 
 class GradCAM(_BaseWrapper):
@@ -44,7 +44,7 @@ class GradCAM(_BaseWrapper):
             def forward_hook_(module, input, output):
                 self.registered_hooks[key][0] = True
                 # Save featuremaps
-                self.fmap_pool[key] = detach_output(output)
+                self.fmap_pool[key] = output.detach()  # detach_output(output)
                 if not isinstance(output, torch.Tensor):
                     print("Cannot hook layer {} because its gradients are not in tensor format".format(key))
 
@@ -84,18 +84,20 @@ class GradCAM(_BaseWrapper):
         return super(GradCAM, self).forward(data)
 
     def generate(self):
+        attention_maps = {}
         if self._target_layers == "auto":
             layer, fmaps, grads = self._auto_layer_selection()
             self._check_hooks(layer)
             attention_map = self._generate_helper(fmaps, grads).cpu().numpy()
             attention_maps = {layer: attention_map}
         else:
-            attention_maps = {}
             for layer in self.target_layers:
                 if not self.registered_only:
                     self._check_hooks(layer)
                 if self.registered_hooks[layer][0] and self.registered_hooks[layer][1]:
                     attention_maps[layer] = self._extract_attentions(str(layer)).cpu().numpy()
+        if not self.registered_only and not attention_maps:
+            raise ValueError("None of the hooks registered to the target layers")
         return attention_maps
 
     def _auto_layer_selection(self):
@@ -123,7 +125,7 @@ class GradCAM(_BaseWrapper):
             except IndexError:
                 counter += 1
 
-        if not found_valid_layer:
+        if not found_valid_layer and not self.registered_only:
             raise ValueError("Could not find a valid layer. "
                              "Check if base.logits or the mask result of base._mask_output() contains only zeros. "
                              "Check if requires_grad flag is true for the batch input and that no torch.no_grad statements effects gcam. "

@@ -9,7 +9,7 @@ MIN_SHAPE = (500, 500)
 
 def save_attention_map(filename, attention_map, heatmap, data=None):
     dim = len(attention_map.shape)
-    attention_map = normalize(attention_map)
+    attention_map = normalize(attention_map.astype(np.float))
     attention_map = generate_attention_map(attention_map, heatmap, dim, data)
     _save_file(filename, attention_map, dim)
 
