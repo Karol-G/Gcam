@@ -3,21 +3,10 @@ import numpy as np
 import torch
 from torch.nn import functional as F
 from gcam.backends.base import _BaseWrapper
+from gcam import gcam_utils
 
-# def detach_output(output):  # TODO: Is this needed? Is this correct?
-#     if not isinstance(output, torch.Tensor):
-#         tuple_list = []
-#         if hasattr(output, '__iter__'):
-#             for item in output:
-#                 if isinstance(output, torch.Tensor):
-#                     tuple_list.append(item.detach())
-#                 else:
-#                     tuple_list.append(detach_output(item))
-#             return tuple_list
-#         else:
-#             return output
-#     return output.detach()
-
+# Changes the used method to hook into backward
+ENABLE_MODULE_HOOK = False
 
 class GradCAM(_BaseWrapper):
     """
@@ -26,79 +15,97 @@ class GradCAM(_BaseWrapper):
     Look at Figure 2 on page 4
     """
 
-    def __init__(self, model, target_layers=None, postprocessor=None, retain_graph=False, registered_only=False):
+    def __init__(self, model, target_layers=None, postprocessor=None, retain_graph=False):
         super(GradCAM, self).__init__(model, postprocessor=postprocessor, retain_graph=retain_graph)
         self.fmap_pool = OrderedDict()
         self.grad_pool = OrderedDict()
-        self.module_names = {}
         self._target_layers = target_layers
         if target_layers == 'full' or target_layers == 'auto':
-            target_layers = np.asarray(list(self.model.named_modules()))[:, 0]
+            target_layers = gcam_utils.get_layers(self.model)
         elif isinstance(target_layers, str):
             target_layers = [target_layers]
         self.target_layers = target_layers
         self.registered_hooks = {}
-        self.registered_only = registered_only
 
+    def _register_hooks(self):
         def forward_hook(key):
             def forward_hook_(module, input, output):
                 self.registered_hooks[key][0] = True
                 # Save featuremaps
-                self.fmap_pool[key] = output.detach()  # detach_output(output)
                 if not isinstance(output, torch.Tensor):
                     print("Cannot hook layer {} because its gradients are not in tensor format".format(key))
 
+                if not ENABLE_MODULE_HOOK:
+                    def _backward_hook(grad_out):
+                        self.registered_hooks[key][1] = True
+                        # Save the gradients correspond to the featuremaps
+                        self.grad_pool[key] = grad_out.detach()
+
+                    # Register backward hook directly to the output
+                    # Handle must be removed afterwards otherwise tensor is not freed
+                    if not self.registered_hooks[key][1]:
+                        _backward_handle = output.register_hook(_backward_hook)
+                        self.backward_handlers.append(_backward_handle)
+                self.fmap_pool[key] = output.detach()
+
             return forward_hook_
 
+        # This backward hook method looks prettier but is currently bugged in pytorch (04/25/2020)
+        # Handle does not need to be removed, tensors are freed automatically
         def backward_hook(key):
             def backward_hook_(module, grad_in, grad_out):
-                #print("grad_out: ", grad_out[0].shape)
                 self.registered_hooks[key][1] = True
                 # Save the gradients correspond to the featuremaps
-                self.grad_pool[key] = grad_out[0].detach()
+                self.grad_pool[key] = grad_out[0].detach()  # TODO: Still correct with batch size > 1?
 
             return backward_hook_
 
-        # If any candidates are not specified, the hook is registered to all the layers.
-        for name, module in model.named_modules():
+        self.remove_hook(forward=True, backward=True)
+        for name, module in self.model.named_modules():
             if self.target_layers is None or name in self.target_layers:
-                # print("Trying to hook layer: {}".format(name))
                 self.registered_hooks[name] = [False, False]
-                self.module_names[module] = name
-                self.handlers.append(module.register_forward_hook(forward_hook(name)))
-                self.handlers.append(module.register_backward_hook(backward_hook(name)))
+                self.forward_handlers.append(module.register_forward_hook(forward_hook(name)))
+                if ENABLE_MODULE_HOOK:
+                    self.backward_handlers.append(module.register_backward_hook(backward_hook(name)))
 
-    def _find(self, pool, target_layer):
-        if target_layer in pool.keys():
-            return pool[target_layer]
-        else:
-            raise ValueError("Invalid layer name: {}".format(target_layer))
-
-    def _compute_grad_weights(self, grads):
-        if len(self.data_shape) == 2:
-            return F.adaptive_avg_pool2d(grads, 1)
-        else:
-            return F.adaptive_avg_pool3d(grads, 1)
+    def get_registered_hooks(self):
+        registered_hooks = []
+        for layer in self.registered_hooks.keys():
+            if self.registered_hooks[layer][0] and self.registered_hooks[layer][1]:
+                registered_hooks.append(layer)
+        self.remove_hook(forward=True, backward=True)
+        if self._target_layers == 'full' or self._target_layers == 'auto':
+            self.target_layers = registered_hooks
+        return registered_hooks
 
     def forward(self, data):
+        self._register_hooks()
         return super(GradCAM, self).forward(data)
 
     def generate(self):
-        attention_maps = {}
-        if self._target_layers == "auto":
-            layer, fmaps, grads = self._auto_layer_selection()
-            self._check_hooks(layer)
-            attention_map = self._generate_helper(fmaps, grads).cpu().numpy()
-            attention_maps = {layer: attention_map}
-        else:
-            for layer in self.target_layers:
-                if not self.registered_only:
+        self.remove_hook(forward=True, backward=True)
+        # print("forward_handlers: ", len(self.forward_handlers))
+        # print("backward_handlers: ", len(self.backward_handlers))
+        try:
+            attention_maps = {}
+            if self._target_layers == "auto":
+                layer, fmaps, grads = self._auto_layer_selection()
+                self._check_hooks(layer)
+                attention_map = self._generate_helper(fmaps, grads).cpu().numpy()
+                attention_maps = {layer: attention_map}
+            else:
+                for layer in self.target_layers:
                     self._check_hooks(layer)
-                if self.registered_hooks[layer][0] and self.registered_hooks[layer][1]:
-                    attention_maps[layer] = self._extract_attentions(str(layer)).cpu().numpy()
-        if not self.registered_only and not attention_maps:
-            raise ValueError("None of the hooks registered to the target layers")
-        return attention_maps
+                    if self.registered_hooks[layer][0] and self.registered_hooks[layer][1]:
+                        fmaps = self._find(self.fmap_pool, layer)
+                        grads = self._find(self.grad_pool, layer)
+                        attention_map = self._generate_helper(fmaps, grads)
+                        attention_maps[layer] = attention_map.cpu().numpy()
+            if not attention_maps:
+                raise ValueError("None of the hooks registered to the target layers")
+            return attention_maps
+        except RuntimeError:
+            raise RuntimeError("Number of set channels ({}) is not a multiple of the feature map channels ({}) in layer: {}".format(self.channels, fmaps.shape[1], layer))
 
     def _auto_layer_selection(self):
         # It's ugly but it works ;)
@@ -125,7 +132,7 @@ class GradCAM(_BaseWrapper):
             except IndexError:
                 counter += 1
 
-        if not found_valid_layer and not self.registered_only:
+        if not found_valid_layer:
             raise ValueError("Could not find a valid layer. "
                              "Check if base.logits or the mask result of base._mask_output() contains only zeros. "
                              "Check if requires_grad flag is true for the batch input and that no torch.no_grad statements effects gcam. "
@@ -133,11 +140,17 @@ class GradCAM(_BaseWrapper):
 
         return layer, fmaps, grads
 
-    def _extract_attentions(self, layer):
-        fmaps = self._find(self.fmap_pool, layer)
-        grads = self._find(self.grad_pool, layer)
-        attention_map = self._generate_helper(fmaps, grads)
-        return attention_map
+    def _find(self, pool, target_layer):
+        if target_layer in pool.keys():
+            return pool[target_layer]
+        else:
+            raise ValueError("Invalid layer name: {}".format(target_layer))
+
+    def _compute_grad_weights(self, grads):
+        if len(self.data_shape) == 2:
+            return F.adaptive_avg_pool2d(grads, 1)
+        else:
+            return F.adaptive_avg_pool3d(grads, 1)
 
     def _generate_helper(self, fmaps, grads):
         weights = self._compute_grad_weights(grads)
@@ -166,4 +179,4 @@ class GradCAM(_BaseWrapper):
         elif not self.registered_hooks[layer][0]:
             raise ValueError("Forward hook did not register to layer: " + str(layer))
         elif not self.registered_hooks[layer][1]:
-            raise ValueError("Backward hook did not register to layer: " + str(layer))
+            raise ValueError("Backward hook did not register to layer: " + str(layer) + ", Check if the hook was registered to a layer that is skipped during backward and thus no gradients are computed")

@@ -28,8 +28,8 @@ class Score():
         mean_scores = self._comp_means(scores)
         with pd.ExcelWriter(self.save_path + 'scores.xlsx') as writer:
             if not mean_only:
-                scores.to_excel(writer, sheet_name='Scores')
-            mean_scores.to_excel(writer, sheet_name='Mean Scores')
+                scores.to_excel(writer, sheet_name='Scores', na_rep='NaN')
+            mean_scores.to_excel(writer, sheet_name='Mean Scores', na_rep='NaN')
 
     def _comp_means(self, scores):
         mean_scores = pd.DataFrame(columns=['mean_score', 'layer', 'class_label'])
@@ -41,7 +41,8 @@ class Score():
             unique_class_labels = pd.unique(_scores['class_label'])
             for unique_class_label in unique_class_labels:
                 __scores = _scores[_scores['class_label'] == unique_class_label]
-                mean_score = __scores['score'].to_numpy()
+                mean_score = __scores['score'].to_numpy().astype(np.float)
+                mean_score = mean_score[~np.isnan(mean_score)]
                 mean_score = np.mean(mean_score)
                 mean_scores = mean_scores.append({'mean_score': mean_score, 'layer': unique_layer, 'class_label': unique_class_label}, ignore_index=True)
         return mean_scores

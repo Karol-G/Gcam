@@ -23,17 +23,17 @@ class Tmp():
         self.model.eval()
 
     def test_gbp_hook(self):
-        gcam.inject(self.model, output_dir="results/unet_seg/test_gbp_hook", backend="gbp",
-                     postprocessor="sigmoid", evaluate=True, save_scores=True, save_maps=True, save_pickle=True, metric="wioa", dim=2, label=lambda x: 0.5 < x)
-        self.model.eval()
-        data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
+        model = gcam.inject(self.model, output_dir="results/unet_seg/test_gbp_hook", backend="gbp",
+                     postprocessor="sigmoid", evaluate=True, save_scores=True, save_maps=True, save_pickle=True, metric="wioa", label=lambda x: 0.5 < x, channels=1)
+        model.eval()
+        data_loader = DataLoader(self.dataset, batch_size=2, shuffle=False)
         # TODO: Memory leak finden (Oder nur beim testen?)
         #outputs = []
         for i, batch in enumerate(data_loader):
-            output = self.model(batch["img"], mask=batch["gt"])
+            output = model(batch["img"], mask=batch["gt"])
             #outputs.append(output)
 
-        self.model.dump()
+        model.dump()
         gc.collect()
         torch.cuda.empty_cache()
 
@@ -46,17 +46,18 @@ class Tmp():
 
     def test_gcam_hook(self):
         layer = 'full'
-        gcam.inject(self.model, output_dir="results/unet_seg/test_gcam_hook", backend="gcam", layer=layer,
-                                postprocessor="sigmoid", evaluate=True, save_scores=True, save_maps=True, save_pickle=True, metric="wioa", dim=2, registered_only=True, label=lambda x: 0.5 < x)
-        self.model.eval()
+        model = gcam.inject(self.model, output_dir="results/unet_seg/test_gcam_hook", backend="gcam", layer=layer,
+                                postprocessor="sigmoid", evaluate=True, save_scores=True, save_maps=True, save_pickle=True, metric="wioa", label=lambda x: 0.5 < x, channels=1)
+        model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
         # TODO: Memory leak finden (Oder nur beim testen?)
+        model.test_run(next(iter(data_loader))["img"])
         #outputs = []
         for i, batch in enumerate(data_loader):
-            output = self.model(batch["img"], mask=batch["gt"])
+            output = model(batch["img"], mask=batch["gt"])
             #outputs.append(output)
 
-        self.model.dump()
+        model.dump()
         gc.collect()
         torch.cuda.empty_cache()
 
@@ -68,18 +69,19 @@ class Tmp():
         #     shutil.rmtree("results")
 
     def test_ggcam_hook(self):
-        layer = 'auto'
-        gcam.inject(self.model, output_dir="results/unet_seg/test_ggcam_hook", backend="ggcam", layer=layer,
-                                postprocessor="sigmoid", evaluate=True, save_scores=True, save_maps=True, save_pickle=True, metric="wioa", dim=2, registered_only=True, label=lambda x: 0.5 < x)
-        self.model.eval()
+        layer = 'full'
+        model = gcam.inject(self.model, output_dir="results/unet_seg/test_ggcam_hook", backend="ggcam", layer=layer,
+                                postprocessor="sigmoid", evaluate=True, save_scores=True, save_maps=True, save_pickle=True, metric="wioa", label=lambda x: 0.5 < x, channels=1)
+        model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
         # TODO: Memory leak finden (Oder nur beim testen?)
+        model.test_run(next(iter(data_loader))["img"])
         #outputs = []
         for i, batch in enumerate(data_loader):
-            output = self.model(batch["img"], mask=batch["gt"])
+            output = model(batch["img"], mask=batch["gt"])
             #outputs.append(output)
 
-        self.model.dump()
+        model.dump()
         gc.collect()
         torch.cuda.empty_cache()
 
@@ -91,18 +93,19 @@ class Tmp():
         #     shutil.rmtree("results")
 
     def test_gcampp_hook(self):
-        layer = 'auto'
-        gcam.inject(self.model, output_dir="results/unet_seg/test_gcampp_hook", backend="gcampp", layer=layer,
-                     postprocessor="sigmoid", evaluate=True, save_scores=True, save_maps=True, save_pickle=True, metric="wioa", dim=2, registered_only=True, label=lambda x: 0.5 < x)
-        self.model.eval()
+        layer = 'full'
+        model = gcam.inject(self.model, output_dir="results/unet_seg/test_gcampp_hook", backend="gcampp", layer=layer,
+                     postprocessor="sigmoid", evaluate=True, save_scores=True, save_maps=True, save_pickle=True, metric="wioa", label=lambda x: 0.5 < x, channels=1)
+        model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
         # TODO: Memory leak finden (Oder nur beim testen?)
+        model.test_run(next(iter(data_loader))["img"])
         #outputs = []
         for i, batch in enumerate(data_loader):
-            output = self.model(batch["img"], mask=batch["gt"])
+            output = model(batch["img"], mask=batch["gt"])
             #outputs.append(output)
 
-        self.model.dump()
+        model.dump()
         gc.collect()
         torch.cuda.empty_cache()
 
@@ -115,7 +118,7 @@ class Tmp():
 
 if __name__ == '__main__':
     test = Tmp()
-    test.test_gbp_hook()
+    #test.test_gbp_hook()
     #test.test_gcam_hook()
     #test.test_ggcam_hook()
-    #test.test_gcampp_hook()
+    test.test_gcampp_hook()

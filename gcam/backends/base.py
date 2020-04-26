@@ -4,14 +4,14 @@ from torch.nn import functional as F
 from gcam import gcam_utils
 
 
-
 class _BaseWrapper():
 
     def __init__(self, model, postprocessor=None, retain_graph=False):
         self.device = next(model.parameters()).device
         self.retain_graph = retain_graph
         self.model = model
-        self.handlers = []
+        self.forward_handlers = []
+        self.backward_handlers = []
         self.postprocessor = postprocessor
 
     def _encode_one_hot(self, ids):
@@ -84,12 +84,18 @@ class _BaseWrapper():
     def generate(self):
         raise NotImplementedError
 
-    def remove_hook(self):
+    def remove_hook(self, forward, backward):
         """
         Remove all the forward/backward hook functions
         """
-        for handle in self.handlers:
-            handle.remove()
+        if forward:
+            for handle in self.forward_handlers:
+                handle.remove()
+            self.forward_handlers = []
+        if backward:
+            for handle in self.backward_handlers:
+                handle.remove()
+            self.backward_handlers = []
 
     def layers(self, reverse=False):
         return gcam_utils.get_layers(self.model, reverse)

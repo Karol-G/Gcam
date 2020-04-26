@@ -4,6 +4,8 @@ import matplotlib.cm as cm
 import nibabel as nib
 import torch
 from torch.nn import functional as F
+from functools import reduce
+import operator
 
 MIN_SHAPE = (500, 500)
 
@@ -95,16 +97,18 @@ def _resize_attention_map(attention_map, min_shape):
 
 def normalize(x):
     if isinstance(x, torch.Tensor):
+        if torch.min(x) == torch.max(x):
+            return torch.zeros(x.shape)
         return (x-torch.min(x))/(torch.max(x)-torch.min(x))
     else:
+        if np.min(x) == np.max(x):
+            return np.zeros(x.shape)
         return (x - np.min(x)) / (np.max(x) - np.min(x))
-
 
 def _save_file(filename, attention_map, dim):
     if dim == 2:
         cv2.imwrite(filename + ".png", attention_map)
     else:
-        #attention_map = attention_map.astype(np.int16)
         # attention_map = attention_map.transpose(1, 2, 0, 3)
         attention_map = attention_map.transpose(1, 2, 0)
         attention_map = nib.Nifti1Image(attention_map, affine=np.eye(4))
@@ -167,3 +171,5 @@ def _interpolate_tensor(data, shape, squeeze):
             data = data.squeeze(0)
     return data
 
+def prod(iterable):
+    return reduce(operator.mul, iterable, 1)

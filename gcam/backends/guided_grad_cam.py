@@ -6,8 +6,8 @@ from gcam import gcam_utils
 
 
 class GuidedGradCam():
-    def __init__(self, model, target_layers=None, postprocessor=None, retain_graph=False, registered_only=False):
-        self.model_GCAM = GradCAM(model=model, target_layers=target_layers, postprocessor=postprocessor, retain_graph=retain_graph, registered_only=registered_only)
+    def __init__(self, model, target_layers=None, postprocessor=None, retain_graph=False):
+        self.model_GCAM = GradCAM(model=model, target_layers=target_layers, postprocessor=postprocessor, retain_graph=retain_graph)
         self.model_GBP = GuidedBackPropagation(model=model, postprocessor=postprocessor, retain_graph=retain_graph)
 
     def forward(self, data):
@@ -18,6 +18,9 @@ class GuidedGradCam():
     def backward(self, label=None):
         self.model_GCAM.backward(label=label)
         self.model_GBP.backward(label=label)
+
+    def get_registered_hooks(self):
+        return self.model_GCAM.get_registered_hooks()
 
     def generate(self):
         attention_map_GCAM = self.model_GCAM.generate()

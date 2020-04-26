@@ -29,11 +29,17 @@ def comp_score(attention_map, mask, metric="wioa", threshold='otsu'):
     return score
 
 def _preprocessing(attention_map, mask, attention_threshold):
+    if not np.isfinite(attention_map).all():
+        raise ValueError("Attention map contains non finite elements")
+    if not np.isfinite(mask).all():
+        raise ValueError("Mask contains non finite elements")
     attention_map = gcam_utils.interpolate(attention_map, mask.shape, squeeze=True)
     attention_map = gcam_utils.normalize(attention_map.astype(np.float))
     weights = copy.deepcopy(attention_map)
     mask = np.array(mask, dtype=int)
-    if attention_threshold == 'otsu':
+    if np.min(attention_map) == np.max(attention_map):
+        attention_threshold = 1
+    elif attention_threshold == 'otsu':
         attention_threshold = threshold_otsu(attention_map.flatten())
     attention_map[attention_map < attention_threshold] = 0
     attention_map[attention_map >= attention_threshold] = 1

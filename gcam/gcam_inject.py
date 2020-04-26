@@ -10,12 +10,13 @@ from gcam.backends.grad_cam_pp import GradCamPP
 from collections import defaultdict
 from gcam.score.score import Score
 import copy
+import numpy as np
 
 # TODO: Set requirements in setup.py
 
 def inject(model, output_dir=None, backend='gcam', layer='auto', postprocessor=None,
            retain_graph=False, save_scores=False, save_maps=False, save_pickle=False, evaluate=False, metric='wioa',
-           return_score=False, threshold='otsu', registered_only=False, replace=False, label=None, channels='default', data_shape='default', cudnn=True):
+           return_score=False, threshold='otsu', replace=False, label=None, channels='default', data_shape='default', cudnn=True, test_batch=None, enabled=True):
 
     if _already_injected(model):
         return
@@ -26,14 +27,14 @@ def inject(model, output_dir=None, backend='gcam', layer='auto', postprocessor=N
     if output_dir is not None:
         Path(output_dir).mkdir(parents=True, exist_ok=True)
 
-    model_clone = copy.deepcopy(model)
+    model_clone = copy.copy(model)
     model_clone.eval()
     # Save the original forward of the model
     # This forward will be called by the backend, so if someone writes a new backend they only need to call model.model_forward and not model.gcam_dict['model_forward']
     setattr(model_clone, 'model_forward', model_clone.forward)
 
-    # Save every other attribute in a dict which is added to the model attributes
-    # It is ugly but it avoids name conflicts
+    # # Save every other attribute in a dict which is added to the model attributes
+    # # It is ugly but it avoids name conflicts
     gcam_dict = {}
 
     gcam_dict['output_dir'] = output_dir
@@ -55,6 +56,8 @@ def inject(model, output_dir=None, backend='gcam', layer='auto', postprocessor=N
     gcam_dict['current_attention_map'] = None
     gcam_dict['current_layer'] = None
     gcam_dict['device'] = next(model_clone.parameters()).device
+    gcam_dict['tested'] = False
+    gcam_dict['enabled'] = enabled
     setattr(model_clone, 'gcam_dict', gcam_dict)
 
     if output_dir is None and (save_scores is not None or save_maps is not None or save_pickle is not None):
@@ -67,16 +70,21 @@ def inject(model, output_dir=None, backend='gcam', layer='auto', postprocessor=N
     model_clone.replace_output = types.MethodType(replace_output, model_clone)
     model_clone.dump = types.MethodType(dump, model_clone)
     model_clone.forward = types.MethodType(forward, model_clone)
+    model_clone.enable_gcam = types.MethodType(enable_gcam, model_clone)
+    model_clone.disable_gcam = types.MethodType(disable_gcam, model_clone)
 
+    model_clone.test_run = types.MethodType(test_run, model_clone)
     model_clone._assign_backend = types.MethodType(_assign_backend, model_clone)
     model_clone._process_attention_maps = types.MethodType(_process_attention_maps, model_clone)
     model_clone._save_attention_map = types.MethodType(_save_attention_map, model_clone)
     model_clone._replace_output = types.MethodType(_replace_output, model_clone)
     model_clone._extract_metadata = types.MethodType(_extract_metadata, model_clone)
 
-    model_backend, heatmap = _assign_backend(backend, model_clone, layer, postprocessor, retain_graph, registered_only)
+    model_backend, heatmap = _assign_backend(backend, model_clone, layer, postprocessor, retain_graph)
     gcam_dict['model_backend'] = model_backend
     gcam_dict['heatmap'] = heatmap
+
+    model_clone.test_run(test_batch)
 
     return model_clone
 
@@ -102,26 +110,54 @@ def dump(self):
         self.gcam_dict['Score'].dump()
 
 def forward(self, batch, label=None, mask=None):
-    with torch.enable_grad():
-        output = self.gcam_dict['model_backend'].forward(batch)
-        batch_size, channels, data_shape = self._extract_metadata(output)
-        self.gcam_dict['model_backend'].backward(label=label)
-        attention_map = self.gcam_dict['model_backend'].generate()
-        if attention_map:
-            if len(attention_map.keys()) == 1:
-                self.gcam_dict['current_attention_map'] = attention_map[list(attention_map.keys())[0]]
-                self.gcam_dict['current_layer'] = list(attention_map.keys())[0]
-            scores = self._process_attention_maps(attention_map, mask, batch_size, channels)
-            output = self._replace_output(output, attention_map, data_shape)
-        else:  # If no attention maps could be extracted
-            self.gcam_dict['current_attention_map'] = None
-            self.gcam_dict['current_layer'] = None
-            scores = None
-        self.gcam_dict['counter'] += 1
-        if self.gcam_dict['return_score']:
-            return output, scores
-        else:
-            return output
+    if self.gcam_dict['enabled']:
+        if self.gcam_dict['layer'] == 'full' and not self.gcam_dict['tested']:
+            raise ValueError("Layer mode 'full' requires a test run either during injection or by calling test_run() afterwards")
+        print("GCAM FORWARD -------------------------------------------------------------------------")
+        with torch.enable_grad():
+            output = self.gcam_dict['model_backend'].forward(batch)
+            batch_size, channels, data_shape = self._extract_metadata(output)
+            self.gcam_dict['model_backend'].backward(label=label)
+            attention_map = self.gcam_dict['model_backend'].generate()
+            if attention_map:
+                if len(attention_map.keys()) == 1:
+                    self.gcam_dict['current_attention_map'] = attention_map[list(attention_map.keys())[0]]
+                    self.gcam_dict['current_layer'] = list(attention_map.keys())[0]
+                scores = self._process_attention_maps(attention_map, mask, batch_size, channels)
+                output = self._replace_output(output, attention_map, data_shape)
+            else:  # If no attention maps could be extracted
+                self.gcam_dict['current_attention_map'] = None
+                self.gcam_dict['current_layer'] = None
+                scores = None
+                if self.gcam_dict['_replace_output']:
+                    raise ValueError("Unable to extract any attention maps")
+            self.gcam_dict['counter'] += 1
+            if self.gcam_dict['return_score']:
+                return output, scores
+            else:
+                return output
+    else:
+        print("MODEL FORWARD -------------------------------------------------------------------------")
+        return self.model_forward(batch)
+
+def test_run(self, batch):
+    registered_hooks = []
+    if batch is not None and not self.gcam_dict['tested']:
+        with torch.enable_grad():
+            output = self.gcam_dict['model_backend'].forward(batch)
+            self.gcam_dict['model_backend'].backward()
+            registered_hooks = self.gcam_dict['model_backend'].get_registered_hooks()
+        self.gcam_dict['tested'] = True
+        print("Successfully registered to the following layers: ", registered_hooks)
+        if self.gcam_dict['output_dir'] is not None:
+            np.savetxt(self.gcam_dict['output_dir'] + '/registered_layers.txt', np.asarray(registered_hooks).astype(str), fmt="%s")
+    return registered_hooks
+
+def disable_gcam(self):
+    self.gcam_dict['enabled'] = False
+
+def enable_gcam(self):
+    self.gcam_dict['enabled'] = True
 
 def _already_injected(model):
     try:  # try/except is faster than hasattr, if inject method is called repeatedly
@@ -130,11 +166,11 @@ def _already_injected(model):
     except AttributeError:
         return False
 
-def _assign_backend(backend, model, target_layers, postprocessor, retain_graph, registered_only):
+def _assign_backend(backend, model, target_layers, postprocessor, retain_graph):
     if backend == "gbp":
         return GuidedBackPropagation(model=model, postprocessor=postprocessor, retain_graph=retain_graph), False
     elif backend == "gcam":
-        return GradCAM(model=model, target_layers=target_layers, postprocessor=postprocessor, retain_graph=retain_graph, registered_only=registered_only), True
+        return GradCAM(model=model, target_layers=target_layers, postprocessor=postprocessor, retain_graph=retain_graph), True
     elif backend == "ggcam":
         return GuidedGradCam(model=model, target_layers=target_layers, postprocessor=postprocessor, retain_graph=retain_graph), False
     elif backend == "gcampp":
