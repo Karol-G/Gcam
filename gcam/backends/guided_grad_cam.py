@@ -1,5 +1,4 @@
 import numpy as np
-import cv2
 from gcam.backends.grad_cam import GradCAM
 from gcam.backends.guided_backpropagation import GuidedBackPropagation
 from gcam import gcam_utils

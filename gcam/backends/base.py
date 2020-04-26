@@ -23,6 +23,7 @@ class _BaseWrapper():
         self.model.zero_grad()
         self.logits = self.model.model_forward(data)
         self._extract_metadata(self.logits)
+        self.remove_hook(forward=True, backward=False)
         return self.logits
 
     def backward(self, label=None):
@@ -36,6 +37,7 @@ class _BaseWrapper():
             self.logits.backward(gradient=self.logits, retain_graph=self.retain_graph)
         else:
             self.logits.backward(gradient=self.mask, retain_graph=self.retain_graph)
+        self.remove_hook(forward=True, backward=True)
 
     def post_processing(self, postprocessor, output):
         if postprocessor is None:
