@@ -1,11 +1,12 @@
 from tests.test_segmentation.unet_seg_dataset import UnetSegDataset as Dataset
 from tests.test_segmentation.model.unet.unet_model import UNet
-from legacy import gcam_old
+from gcam import gcam
 import torch
 import os
 import unittest
 from torch.utils.data import DataLoader
 import gc
+import shutil
 
 
 class TestSegmentation(unittest.TestCase):
@@ -21,114 +22,79 @@ class TestSegmentation(unittest.TestCase):
         self.model.to(device=self.DEVICE)
         self.model.eval()
 
-    # def test_forward_disabled(self):
-    #     DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    #     dataset = Dataset(device=DEVICE)
-    #     model = Model(device=DEVICE)
-    #     outputs = gcam.forward_disabled(model, dataset, iterations=2)
-    #     assert outputs[0].shape == (1, 1, 384, 575)
-    #     assert outputs[1].shape == (1, 1, 384, 575)
-
-    # def test_forward_gcam(self):
-    #     DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    #     dataset = Dataset(device=DEVICE)
-    #     model = Model(device=DEVICE)
-    #     batch = dataset.__getitem__(0)
-    #     _, heatmap_gcam, heatmap_guided_gcam = gcam.forward_gcam(model, batch, layer='model.outc.conv')
-    #     assert heatmap_gcam.shape == (1, 384, 575, 3)
-    #     assert heatmap_guided_gcam.shape == (1, 384, 575)
-
-    # def test_evaluation_gcam(self):
-    #     if os.path.isdir("results"):
-    #         shutil.rmtree("results")
-    #     DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    #     dataset = Dataset(device=DEVICE)
-    #     model = Model(device=DEVICE)
-    #     layer = 'full' #'model.outc.conv'
-    #     gcam.extract(model, dataset, output_dir="results/unet_seg/test_evaluation_gcam", layer=layer)
-    #     assert path.exists("results/unet_seg/test_evaluation_gcam/" + layer + "/attention_map_0_score_100.0.png")
-    #     assert path.exists("results/unet_seg/test_evaluation_gcam/" + layer + "/attention_map_1_score_100.0.png")
-    #     assert path.exists("results/unet_seg/test_evaluation_gcam/" + layer + "/attention_map_2_score_100.0.png")
-    #     # assert path.exists("results/unet_seg/test_evaluation_gcam/" + layer + "/overlap_percentage.npy")
-    #     # assert path.exists("results/unet_seg/test_evaluation_gcam/" + layer + "/overlap_percentage.txt")
-    #     # if os.path.isdir("results"):
-    #     #     shutil.rmtree("results")
-
-
-
-
-    def test_gbp_hook(self):
-        model = gcam_old.inject(self.model, output_dir="results/unet_seg/test_gbp_hook", backend="gbp", input_key=None, mask_key=None, postprocessor="sigmoid")
+    def test_gbp(self):
+        model = gcam.inject(self.model, output_dir="results/unet_seg/gbp", backend="gbp",
+                     postprocessor="sigmoid", evaluate=True, save_scores=True, save_maps=False, save_pickle=False, metric="wioa", label=lambda x: 0.5 < x, channels=1)
         model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
-        # TODO: Memory leak finden (Oder nur beim testen?)
-        #outputs = []
-        for i, batch in enumerate(data_loader):
-            output = model(batch["img"])
-            #outputs.append(output)
 
+        for i, batch in enumerate(data_loader):
+            _ = model(batch["img"], mask=batch["gt"])
+
+        del model
         gc.collect()
         torch.cuda.empty_cache()
 
-        # assert path.exists("results/unet_seg/test_gcam_hook/" + layer + "/attention_map_0.png")
-        # assert path.exists("results/unet_seg/test_gcam_hook/" + layer + "/attention_map_1.png")
-        # assert path.exists("results/unet_seg/test_gcam_hook/" + layer + "/attention_map_2.png")
+        if os.path.isdir("results/unet_seg"):
+            shutil.rmtree("results/unet_seg")
 
-        # if os.path.isdir("results"):
-        #     shutil.rmtree("results")
-
-    def test_gcam_hook(self):
+    def test_gcam(self):
         layer = 'full'
-        model = gcam_old.inject(self.model, output_dir="results/unet_seg/test_gcam_hook", backend="gcam", layer=layer, input_key=None, mask_key=None, postprocessor="sigmoid")
+        metric = 'wioa'
+        model = gcam.inject(self.model, output_dir="results/unet_seg/gcam_" + metric, backend="gcam", layer=layer,
+                                postprocessor="sigmoid", evaluate=True, save_scores=True, save_maps=False, save_pickle=False, metric=metric, label=lambda x: 0.5 < x, channels=1)
         model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
-        # TODO: Memory leak finden (Oder nur beim testen?)
-        #outputs = []
-        for i, batch in enumerate(data_loader):
-            output = model(batch["img"])
-            #outputs.append(output)
+        model.test_run(next(iter(data_loader))["img"])
 
+        for i, batch in enumerate(data_loader):
+            _ = model(batch["img"], mask=batch["gt"])
+
+        del model
         gc.collect()
         torch.cuda.empty_cache()
 
-        # assert path.exists("results/unet_seg/test_gcam_hook/" + layer + "/attention_map_0.png")
-        # assert path.exists("results/unet_seg/test_gcam_hook/" + layer + "/attention_map_1.png")
-        # assert path.exists("results/unet_seg/test_gcam_hook/" + layer + "/attention_map_2.png")
+        if os.path.isdir("results/unet_seg"):
+            shutil.rmtree("results/unet_seg")
 
-        # if os.path.isdir("results"):
-        #     shutil.rmtree("results")
-
-    def test_ggcam_hook(self):
+    def test_ggcam(self):
         layer = 'full'
-        model = gcam_old.inject(self.model, output_dir="results/unet_seg/test_ggcam_hook", backend="ggcam", layer=layer, input_key=None, mask_key=None, postprocessor="sigmoid")
+        metric = 'wioa'
+        model = gcam.inject(self.model, output_dir="results/unet_seg/ggcam_" + metric, backend="ggcam", layer=layer,
+                                postprocessor="sigmoid", evaluate=True, save_scores=True, save_maps=False, save_pickle=False, metric=metric, label=lambda x: 0.5 < x, channels=1)
         model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
-        # TODO: Memory leak finden (Oder nur beim testen?)
-        #outputs = []
-        for i, batch in enumerate(data_loader):
-            output = model(batch["img"])
-            #outputs.append(output)
+        model.test_run(next(iter(data_loader))["img"])
 
+        for i, batch in enumerate(data_loader):
+            _ = model(batch["img"], mask=batch["gt"])
+
+        del model
         gc.collect()
         torch.cuda.empty_cache()
 
-        # assert path.exists("results/unet_seg/test_gcam_hook/" + layer + "/attention_map_0.png")
-        # assert path.exists("results/unet_seg/test_gcam_hook/" + layer + "/attention_map_1.png")
-        # assert path.exists("results/unet_seg/test_gcam_hook/" + layer + "/attention_map_2.png")
+        if os.path.isdir("results/unet_seg"):
+            shutil.rmtree("results/unet_seg")
 
-        # if os.path.isdir("results"):
-        #     shutil.rmtree("results")
-
-    def test_gcam_hook_attribute_copy(self):
+    def test_gcampp(self):
         layer = 'full'
-        gcam_model = gcam_old.inject(self.model, output_dir="results/unet_seg/test_gcam_hook", backend="gcam", layer=layer, input_key=None, mask_key=None, postprocessor="sigmoid")
+        metric = 'ioa'
+        model = gcam.inject(self.model, output_dir="results/unet_seg/gcampp_" + metric, backend="gcampp", layer=layer,
+                     postprocessor="sigmoid", evaluate=True, save_scores=True, save_maps=False, save_pickle=False, metric=metric, label=lambda x: 0.5 < x, channels=1)
+        model.eval()
+        data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
+        model.test_run(next(iter(data_loader))["img"])
 
-        self.model.set_value(1)
-        assert(self.model.get_value() == 1)
-        assert (gcam_model.get_value() == -1)
-        gcam_model.set_value(2)
-        assert (self.model.get_value() == 1)
-        assert (gcam_model.get_value() == 2)
+        for i, batch in enumerate(data_loader):
+            _ = model(batch["img"], mask=batch["gt"])
+
+        del model
+        gc.collect()
+        torch.cuda.empty_cache()
+
+        if os.path.isdir("results/unet_seg"):
+            shutil.rmtree("results/unet_seg")
+
 
 if __name__ == '__main__':
     unittest.main()
