@@ -29,49 +29,51 @@ import numpy as np
 import matplotlib.cm as cm
 import nibabel as nib
 import torch
+from torch.nn import functional as F
+from functools import reduce
+import operator
 
 MIN_SHAPE = (500, 500)
 
-def save_attention_map(filename, attention_map, heatmap, dim, data=None):
-    attention_map = normalize(attention_map)
-    attention_map = generate_attention_map(attention_map, heatmap, dim, data)
+def save_attention_map(filename, attention_map, heatmap):
+    &#34;&#34;&#34;
+    Saves an attention maps.
+    Args:
+        filename: The save path, including the name, excluding the file extension.
+        attention_map: The attention map in HxW or DxHxW format.
+        heatmap: If the attiention map should be saved as a heatmap. True for gcam and gcampp. False for gbp and ggcam.
+    &#34;&#34;&#34;
+    dim = len(attention_map.shape)
+    attention_map = normalize(attention_map.astype(np.float))
+    attention_map = generate_attention_map(attention_map, heatmap, dim)
     _save_file(filename, attention_map, dim)
 
-def generate_attention_map(attention_map, heatmap, dim, data=None):
+def generate_attention_map(attention_map, heatmap, dim):
     if dim == 2:
         if heatmap:
-            return generate_gcam2d(attention_map, data)
+            return generate_gcam2d(attention_map)
         else:
             return generate_guided_bp2d(attention_map)
     elif dim == 3:
         if heatmap:
-            return generate_gcam3d(attention_map, data)
+            return generate_gcam3d(attention_map)
         else:
             return generate_guided_bp3d(attention_map)
     else:
         raise RuntimeError(&#34;Unsupported dimension. Only 2D and 3D data is supported.&#34;)
 
-def generate_gcam2d(attention_map, data=None):
+def generate_gcam2d(attention_map):
     assert(len(attention_map.shape) == 2)  # No batch dim
     assert(isinstance(attention_map, np.ndarray))  # Not a tensor
-    assert(isinstance(data, np.ndarray) or isinstance(data, str) or data is None)  # Not PIL
-    assert(data is None or len(data.shape) == 2 or data.shape[2] == 3)  # Format (h,w) or (h,w,c)
 
-    if data is not None:
-        data = _load_data(data)
-        attention_map = _resize_attention_map(attention_map, data.shape[:2])
-        cmap = cm.jet_r(attention_map)[..., :3] * 255.0  # TODO: Still bugged with batch dim
-        attention_map = (cmap.astype(np.float) + data.astype(np.float)) / 2  # TODO: Still bugged with batch dim
-    else:
-        attention_map = _resize_attention_map(attention_map, MIN_SHAPE)
-        attention_map = cm.jet_r(attention_map)[..., :3] * 255.0  # TODO: Still bugged with batch dim
+    attention_map = _resize_attention_map(attention_map, MIN_SHAPE)
+    attention_map = cm.jet_r(attention_map)[..., :3] * 255.0
     return np.uint8(attention_map)
 
 def generate_guided_bp2d(attention_map):
     assert(len(attention_map.shape) == 2)
     assert (isinstance(attention_map, np.ndarray))  # Not a tensor
-    # attention_map -= np.min(attention_map)
-    # attention_map /= np.max(attention_map)
+
     attention_map *= 255.0
     attention_map = _resize_attention_map(attention_map, MIN_SHAPE)
     return np.uint8(attention_map)
@@ -82,23 +84,14 @@ def generate_gcam3d(attention_map, data=None):
     assert(isinstance(data, np.ndarray) or data is None)  # Not PIL
     assert(data is None or len(data.shape) == 3)
 
-    if data is not None:
-        attention_map = _resize_attention_map(attention_map, data.shape[:3])
-        cmap = cm.jet_r(attention_map)[..., :3] * 255.0  # TODO: Still bugged with batch dim
-        attention_map = (cmap.astype(np.float) + data.astype(np.float)) / 2  # TODO: Still bugged with batch dim
-    else:
-        # attention_map = _resize_attention_map(attention_map, MIN_SHAPE)
-        #attention_map = cm.jet_r(attention_map)[..., :3] * 255.0  # TODO: Still bugged with batch dim
-        attention_map *= 255.0
+    attention_map *= 255.0
     return np.uint8(attention_map)
 
 def generate_guided_bp3d(attention_map):
     assert(len(attention_map.shape) == 3)
     assert (isinstance(attention_map, np.ndarray))  # Not a tensor
-    # attention_map -= np.min(attention_map)
-    # attention_map /= np.max(attention_map)
+
     attention_map *= 255.0
-    #attention_map = _resize_attention_map(attention_map, MIN_SHAPE)
     return np.uint8(attention_map)
 
 def _load_data(data_path):
@@ -118,23 +111,26 @@ def _resize_attention_map(attention_map, min_shape):
     return attention_map
 
 def normalize(x):
+    &#34;&#34;&#34;Normalizes data both numpy or tensor data to range [0,1].&#34;&#34;&#34;
     if isinstance(x, torch.Tensor):
+        if torch.min(x) == torch.max(x):
+            return torch.zeros(x.shape)
         return (x-torch.min(x))/(torch.max(x)-torch.min(x))
     else:
+        if np.min(x) == np.max(x):
+            return np.zeros(x.shape)
         return (x - np.min(x)) / (np.max(x) - np.min(x))
-
 
 def _save_file(filename, attention_map, dim):
     if dim == 2:
         cv2.imwrite(filename + &#34;.png&#34;, attention_map)
     else:
-        #attention_map = attention_map.astype(np.int16)
-        # attention_map = attention_map.transpose(1, 2, 0, 3)
         attention_map = attention_map.transpose(1, 2, 0)
         attention_map = nib.Nifti1Image(attention_map, affine=np.eye(4))
         nib.save(attention_map, filename + &#34;.nii.gz&#34;)
 
 def get_layers(model, reverse=False):
+    &#34;&#34;&#34;Returns the layers of the model. Optionally reverses the order of the layers.&#34;&#34;&#34;
     layer_names = []
     for name, _ in model.named_modules():
         layer_names.append(name)
@@ -159,7 +155,42 @@ def get_layers(model, reverse=False):
     if reverse:
         layer_names.reverse()
 
-    return layer_names</code></pre>
+    return layer_names
+
+def interpolate(data, shape, squeeze=False):
+    &#34;&#34;&#34;Interpolates data to the size of a given shape. Optionally squeezes away the batch and channel dim if the data was given in HxW or DxHxW format.&#34;&#34;&#34;
+    if isinstance(data, np.ndarray):
+        # Lazy solution, numpy and scipy have multiple interpolate methods with only linear or nearest, so I don&#39;t know which one to use... + they don&#39;t work with batches
+        # Should be redone with numpy or scipy though
+        data_type = data.dtype
+        data = torch.FloatTensor(data)
+        data = _interpolate_tensor(data, shape, squeeze)
+        data = data.numpy().astype(data_type)
+    elif isinstance(data, torch.Tensor):
+        data = _interpolate_tensor(data, shape, squeeze)
+    else:
+        raise ValueError(&#34;Unsupported data type for interpolation&#34;)
+    return data
+
+def _interpolate_tensor(data, shape, squeeze):
+    &#34;&#34;&#34;Interpolates data to the size of a given shape. Optionally squeezes away the batch and channel dim if the data was given in HxW or DxHxW format.&#34;&#34;&#34;
+    if (len(shape) == 2 and len(data.shape) == 2) or ((len(shape) == 3 and len(data.shape) == 3)):  # Add batch and channel dim
+        data = data.unsqueeze(0).unsqueeze(0)
+        _squeeze = 2
+    elif (len(shape) == 2 and len(data.shape) == 3) or ((len(shape) == 3 and len(data.shape) == 4)):  # Add batch dim
+        data = data.unsqueeze(0)
+        _squeeze = 1
+    if len(shape) == 2:
+        data = F.interpolate(data, shape, mode=&#34;bilinear&#34;, align_corners=False)
+    else:
+        data = F.interpolate(data, shape, mode=&#34;trilinear&#34;, align_corners=False)
+    if squeeze:  # Remove unnecessary dims
+        for i in range(_squeeze):
+            data = data.squeeze(0)
+    return data
+
+def prod(iterable):
+    return reduce(operator.mul, iterable, 1)</code></pre>
 </details>
 </section>
 <section>
@@ -170,7 +201,7 @@ def get_layers(model, reverse=False):
 <h2 class="section-title" id="header-functions">Functions</h2>
 <dl>
 <dt id="gcam.gcam_utils.generate_attention_map"><code class="name flex">
-<span>def <span class="ident">generate_attention_map</span></span>(<span>attention_map, heatmap, dim, data=None)</span>
+<span>def <span class="ident">generate_attention_map</span></span>(<span>attention_map, heatmap, dim)</span>
 </code></dt>
 <dd>
 <div class="desc"></div>
@@ -178,15 +209,15 @@ def get_layers(model, reverse=False):
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def generate_attention_map(attention_map, heatmap, dim, data=None):
+<pre><code class="python">def generate_attention_map(attention_map, heatmap, dim):
     if dim == 2:
         if heatmap:
-            return generate_gcam2d(attention_map, data)
+            return generate_gcam2d(attention_map)
         else:
             return generate_guided_bp2d(attention_map)
     elif dim == 3:
         if heatmap:
-            return generate_gcam3d(attention_map, data)
+            return generate_gcam3d(attention_map)
         else:
             return generate_guided_bp3d(attention_map)
     else:
@@ -194,7 +225,7 @@ def get_layers(model, reverse=False):
 </details>
 </dd>
 <dt id="gcam.gcam_utils.generate_gcam2d"><code class="name flex">
-<span>def <span class="ident">generate_gcam2d</span></span>(<span>attention_map, data=None)</span>
+<span>def <span class="ident">generate_gcam2d</span></span>(<span>attention_map)</span>
 </code></dt>
 <dd>
 <div class="desc"></div>
@@ -202,20 +233,12 @@ def get_layers(model, reverse=False):
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def generate_gcam2d(attention_map, data=None):
+<pre><code class="python">def generate_gcam2d(attention_map):
     assert(len(attention_map.shape) == 2)  # No batch dim
     assert(isinstance(attention_map, np.ndarray))  # Not a tensor
-    assert(isinstance(data, np.ndarray) or isinstance(data, str) or data is None)  # Not PIL
-    assert(data is None or len(data.shape) == 2 or data.shape[2] == 3)  # Format (h,w) or (h,w,c)
 
-    if data is not None:
-        data = _load_data(data)
-        attention_map = _resize_attention_map(attention_map, data.shape[:2])
-        cmap = cm.jet_r(attention_map)[..., :3] * 255.0  # TODO: Still bugged with batch dim
-        attention_map = (cmap.astype(np.float) + data.astype(np.float)) / 2  # TODO: Still bugged with batch dim
-    else:
-        attention_map = _resize_attention_map(attention_map, MIN_SHAPE)
-        attention_map = cm.jet_r(attention_map)[..., :3] * 255.0  # TODO: Still bugged with batch dim
+    attention_map = _resize_attention_map(attention_map, MIN_SHAPE)
+    attention_map = cm.jet_r(attention_map)[..., :3] * 255.0
     return np.uint8(attention_map)</code></pre>
 </details>
 </dd>
@@ -234,14 +257,7 @@ def get_layers(model, reverse=False):
     assert(isinstance(data, np.ndarray) or data is None)  # Not PIL
     assert(data is None or len(data.shape) == 3)
 
-    if data is not None:
-        attention_map = _resize_attention_map(attention_map, data.shape[:3])
-        cmap = cm.jet_r(attention_map)[..., :3] * 255.0  # TODO: Still bugged with batch dim
-        attention_map = (cmap.astype(np.float) + data.astype(np.float)) / 2  # TODO: Still bugged with batch dim
-    else:
-        # attention_map = _resize_attention_map(attention_map, MIN_SHAPE)
-        #attention_map = cm.jet_r(attention_map)[..., :3] * 255.0  # TODO: Still bugged with batch dim
-        attention_map *= 255.0
+    attention_map *= 255.0
     return np.uint8(attention_map)</code></pre>
 </details>
 </dd>
@@ -257,8 +273,7 @@ def get_layers(model, reverse=False):
 <pre><code class="python">def generate_guided_bp2d(attention_map):
     assert(len(attention_map.shape) == 2)
     assert (isinstance(attention_map, np.ndarray))  # Not a tensor
-    # attention_map -= np.min(attention_map)
-    # attention_map /= np.max(attention_map)
+
     attention_map *= 255.0
     attention_map = _resize_attention_map(attention_map, MIN_SHAPE)
     return np.uint8(attention_map)</code></pre>
@@ -276,10 +291,8 @@ def get_layers(model, reverse=False):
 <pre><code class="python">def generate_guided_bp3d(attention_map):
     assert(len(attention_map.shape) == 3)
     assert (isinstance(attention_map, np.ndarray))  # Not a tensor
-    # attention_map -= np.min(attention_map)
-    # attention_map /= np.max(attention_map)
+
     attention_map *= 255.0
-    #attention_map = _resize_attention_map(attention_map, MIN_SHAPE)
     return np.uint8(attention_map)</code></pre>
 </details>
 </dd>
@@ -287,12 +300,13 @@ def get_layers(model, reverse=False):
 <span>def <span class="ident">get_layers</span></span>(<span>model, reverse=False)</span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>Returns the layers of the model. Optionally reverses the order of the layers.</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def get_layers(model, reverse=False):
+    &#34;&#34;&#34;Returns the layers of the model. Optionally reverses the order of the layers.&#34;&#34;&#34;
     layer_names = []
     for name, _ in model.named_modules():
         layer_names.append(name)
@@ -320,24 +334,54 @@ def get_layers(model, reverse=False):
     return layer_names</code></pre>
 </details>
 </dd>
+<dt id="gcam.gcam_utils.interpolate"><code class="name flex">
+<span>def <span class="ident">interpolate</span></span>(<span>data, shape, squeeze=False)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Interpolates data to the size of a given shape. Optionally squeezes away the batch and channel dim if the data was given in HxW or DxHxW format.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def interpolate(data, shape, squeeze=False):
+    &#34;&#34;&#34;Interpolates data to the size of a given shape. Optionally squeezes away the batch and channel dim if the data was given in HxW or DxHxW format.&#34;&#34;&#34;
+    if isinstance(data, np.ndarray):
+        # Lazy solution, numpy and scipy have multiple interpolate methods with only linear or nearest, so I don&#39;t know which one to use... + they don&#39;t work with batches
+        # Should be redone with numpy or scipy though
+        data_type = data.dtype
+        data = torch.FloatTensor(data)
+        data = _interpolate_tensor(data, shape, squeeze)
+        data = data.numpy().astype(data_type)
+    elif isinstance(data, torch.Tensor):
+        data = _interpolate_tensor(data, shape, squeeze)
+    else:
+        raise ValueError(&#34;Unsupported data type for interpolation&#34;)
+    return data</code></pre>
+</details>
+</dd>
 <dt id="gcam.gcam_utils.normalize"><code class="name flex">
 <span>def <span class="ident">normalize</span></span>(<span>x)</span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>Normalizes data both numpy or tensor data to range [0,1].</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def normalize(x):
+    &#34;&#34;&#34;Normalizes data both numpy or tensor data to range [0,1].&#34;&#34;&#34;
     if isinstance(x, torch.Tensor):
+        if torch.min(x) == torch.max(x):
+            return torch.zeros(x.shape)
         return (x-torch.min(x))/(torch.max(x)-torch.min(x))
     else:
+        if np.min(x) == np.max(x):
+            return np.zeros(x.shape)
         return (x - np.min(x)) / (np.max(x) - np.min(x))</code></pre>
 </details>
 </dd>
-<dt id="gcam.gcam_utils.save_attention_map"><code class="name flex">
-<span>def <span class="ident">save_attention_map</span></span>(<span>filename, attention_map, heatmap, dim, data=None)</span>
+<dt id="gcam.gcam_utils.prod"><code class="name flex">
+<span>def <span class="ident">prod</span></span>(<span>iterable)</span>
 </code></dt>
 <dd>
 <div class="desc"></div>
@@ -345,9 +389,39 @@ def get_layers(model, reverse=False):
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def save_attention_map(filename, attention_map, heatmap, dim, data=None):
-    attention_map = normalize(attention_map)
-    attention_map = generate_attention_map(attention_map, heatmap, dim, data)
+<pre><code class="python">def prod(iterable):
+    return reduce(operator.mul, iterable, 1)</code></pre>
+</details>
+</dd>
+<dt id="gcam.gcam_utils.save_attention_map"><code class="name flex">
+<span>def <span class="ident">save_attention_map</span></span>(<span>filename, attention_map, heatmap)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Saves an attention maps.</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>filename</code></strong></dt>
+<dd>The save path, including the name, excluding the file extension.</dd>
+<dt><strong><code>attention_map</code></strong></dt>
+<dd>The attention map in HxW or DxHxW format.</dd>
+<dt><strong><code>heatmap</code></strong></dt>
+<dd>If the attiention map should be saved as a heatmap. True for gcam and gcampp. False for gbp and ggcam.</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def save_attention_map(filename, attention_map, heatmap):
+    &#34;&#34;&#34;
+    Saves an attention maps.
+    Args:
+        filename: The save path, including the name, excluding the file extension.
+        attention_map: The attention map in HxW or DxHxW format.
+        heatmap: If the attiention map should be saved as a heatmap. True for gcam and gcampp. False for gbp and ggcam.
+    &#34;&#34;&#34;
+    dim = len(attention_map.shape)
+    attention_map = normalize(attention_map.astype(np.float))
+    attention_map = generate_attention_map(attention_map, heatmap, dim)
     _save_file(filename, attention_map, dim)</code></pre>
 </details>
 </dd>
@@ -375,7 +449,9 @@ def get_layers(model, reverse=False):
 <li><code><a title="gcam.gcam_utils.generate_guided_bp2d" href="#gcam.gcam_utils.generate_guided_bp2d">generate_guided_bp2d</a></code></li>
 <li><code><a title="gcam.gcam_utils.generate_guided_bp3d" href="#gcam.gcam_utils.generate_guided_bp3d">generate_guided_bp3d</a></code></li>
 <li><code><a title="gcam.gcam_utils.get_layers" href="#gcam.gcam_utils.get_layers">get_layers</a></code></li>
+<li><code><a title="gcam.gcam_utils.interpolate" href="#gcam.gcam_utils.interpolate">interpolate</a></code></li>
 <li><code><a title="gcam.gcam_utils.normalize" href="#gcam.gcam_utils.normalize">normalize</a></code></li>
+<li><code><a title="gcam.gcam_utils.prod" href="#gcam.gcam_utils.prod">prod</a></code></li>
 <li><code><a title="gcam.gcam_utils.save_attention_map" href="#gcam.gcam_utils.save_attention_map">save_attention_map</a></code></li>
 </ul>
 </li>

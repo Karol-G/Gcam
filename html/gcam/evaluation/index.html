@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
 <meta name="generator" content="pdoc 0.8.1" />
-<title>gcam.score_utils API documentation</title>
+<title>gcam.evaluation API documentation</title>
 <meta name="description" content="" />
 <link href='https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.0/normalize.min.css' rel='stylesheet'>
 <link href='https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/8.0.0/sanitize.min.css' rel='stylesheet'>
@@ -17,115 +17,26 @@
 <main>
 <article id="content">
 <header>
-<h1 class="title">Module <code>gcam.score_utils</code></h1>
+<h1 class="title">Module <code>gcam.evaluation</code></h1>
 </header>
 <section id="section-intro">
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">import numpy as np
-import torch
-import cv2
-import copy
-
-def comp_score(attention_map, mask, metric=&#34;wioa&#34;, threshold=0.3):
-    if isinstance(mask, torch.Tensor):
-        mask = mask.detach().cpu().numpy()
-    else:
-        mask = np.asarray(mask)
-    allowed = [0, 1, 0.0, 1.0]
-    if np.min(mask) in allowed and np.max(mask) in allowed:
-        mask = mask.astype(int)
-    else:
-        raise TypeError(&#34;Mask values need to be 0/1&#34;)
-    binary_attention_map, mask, weights = _preprocessing(attention_map, mask, threshold)
-    if metric[0] != &#34;w&#34;:
-        weights = None
-    if metric == &#34;ioa&#34; or metric == &#34;wioa&#34;:
-        score = _intersection_over_attention(binary_attention_map, mask, weights)
-    elif metric == &#34;iou&#34; or metric == &#34;wiou&#34;:
-        score = _intersection_over_union(binary_attention_map, mask, weights)
-    elif callable(metric):
-        score = metric(attention_map, mask, attention_map, weights)
-    else:
-        raise AttributeError(&#34;Metric does not exist&#34;)
-    return score
-
-def _preprocessing(attention_map, mask, attention_threshold):
-    attention_map = _resize_attention_map(attention_map, mask.shape)
-    weights = copy.deepcopy(attention_map)
-    mask = np.array(mask, dtype=int)
-    attention_map[attention_map &lt; attention_threshold] = 0
-    attention_map[attention_map &gt;= attention_threshold] = 1
-    attention_map = np.array(attention_map, dtype=int)
-    return attention_map, mask, weights
-
-def _resize_attention_map(attention_map, target_shape):
-    return cv2.resize(attention_map, tuple(np.flip(target_shape)))
-
-def _intersection_over_attention(binary_attention_map, mask, weights):
-    intersection = binary_attention_map &amp; mask
-    if weights is not None:
-        intersection = intersection.astype(np.float) * weights
-        binary_attention_map = binary_attention_map.astype(np.float) * weights
-    ioa = np.sum(intersection) / np.sum(binary_attention_map)
-    return ioa
-
-def _intersection_over_union(binary_attention_map, mask, weights):  # TODO: wiou is bad and wrong, maybe not even possible?
-    intersection = binary_attention_map &amp; mask
-    if weights is not None:
-        outer_attention = binary_attention_map - intersection
-        outer_attention = outer_attention.astype(np.float) * weights
-        union = outer_attention + mask.astype(np.float)
-        intersection = intersection.astype(np.float) * weights
-    else:
-        union = binary_attention_map | mask
-    iou = np.sum(intersection) / np.sum(union).astype(np.float)
-    return iou</code></pre>
-</details>
 </section>
 <section>
-</section>
-<section>
-</section>
-<section>
-<h2 class="section-title" id="header-functions">Functions</h2>
+<h2 class="section-title" id="header-submodules">Sub-modules</h2>
 <dl>
-<dt id="gcam.score_utils.comp_score"><code class="name flex">
-<span>def <span class="ident">comp_score</span></span>(<span>attention_map, mask, metric='wioa', threshold=0.3)</span>
-</code></dt>
+<dt><code class="name"><a title="gcam.evaluation.evaluation_utils" href="evaluation_utils.html">gcam.evaluation.evaluation_utils</a></code></dt>
 <dd>
 <div class="desc"></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def comp_score(attention_map, mask, metric=&#34;wioa&#34;, threshold=0.3):
-    if isinstance(mask, torch.Tensor):
-        mask = mask.detach().cpu().numpy()
-    else:
-        mask = np.asarray(mask)
-    allowed = [0, 1, 0.0, 1.0]
-    if np.min(mask) in allowed and np.max(mask) in allowed:
-        mask = mask.astype(int)
-    else:
-        raise TypeError(&#34;Mask values need to be 0/1&#34;)
-    binary_attention_map, mask, weights = _preprocessing(attention_map, mask, threshold)
-    if metric[0] != &#34;w&#34;:
-        weights = None
-    if metric == &#34;ioa&#34; or metric == &#34;wioa&#34;:
-        score = _intersection_over_attention(binary_attention_map, mask, weights)
-    elif metric == &#34;iou&#34; or metric == &#34;wiou&#34;:
-        score = _intersection_over_union(binary_attention_map, mask, weights)
-    elif callable(metric):
-        score = metric(attention_map, mask, attention_map, weights)
-    else:
-        raise AttributeError(&#34;Metric does not exist&#34;)
-    return score</code></pre>
-</details>
+</dd>
+<dt><code class="name"><a title="gcam.evaluation.evaluator" href="evaluator.html">gcam.evaluation.evaluator</a></code></dt>
+<dd>
+<div class="desc"></div>
 </dd>
 </dl>
+</section>
+<section>
+</section>
+<section>
 </section>
 <section>
 </section>
@@ -138,12 +49,13 @@ def _intersection_over_union(binary_attention_map, mask, weights):  # TODO: wiou
 <ul id="index">
 <li><h3>Super-module</h3>
 <ul>
-<li><code><a title="gcam" href="index.html">gcam</a></code></li>
+<li><code><a title="gcam" href="../index.html">gcam</a></code></li>
 </ul>
 </li>
-<li><h3><a href="#header-functions">Functions</a></h3>
-<ul class="">
-<li><code><a title="gcam.score_utils.comp_score" href="#gcam.score_utils.comp_score">comp_score</a></code></li>
+<li><h3><a href="#header-submodules">Sub-modules</a></h3>
+<ul>
+<li><code><a title="gcam.evaluation.evaluation_utils" href="evaluation_utils.html">gcam.evaluation.evaluation_utils</a></code></li>
+<li><code><a title="gcam.evaluation.evaluator" href="evaluator.html">gcam.evaluation.evaluator</a></code></li>
 </ul>
 </li>
 </ul>

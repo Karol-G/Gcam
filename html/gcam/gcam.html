@@ -26,19 +26,33 @@
 </summary>
 <pre><code class="python">from gcam import gcam_inject
 from gcam import gcam_utils
-from gcam import score_utils
+from gcam.evaluation import evaluation_utils, evaluator
+from functools import wraps
 
 
+@wraps(gcam_inject.inject)
 def inject(*args, **kwargs):
-    gcam_inject.inject(*args, **kwargs)
+    return gcam_inject.inject(*args, **kwargs)
 
 
+@wraps(gcam_utils.get_layers)
 def get_layers(model, reverse=False):
     return gcam_utils.get_layers(model, reverse)
 
 
-def compute_score(attention_map, mask, metric=&#34;wioa&#34;, threshold=0.3):
-    return score_utils.comp_score(attention_map, mask, metric, threshold)</code></pre>
+@wraps(evaluation_utils.comp_score)
+def compute_score(attention_map, mask, metric=&#34;wioa&#34;, threshold=&#39;otsu&#39;):
+    return evaluation_utils.comp_score(attention_map, mask, metric, threshold)
+
+
+@wraps(evaluator.Evaluator)
+def Evaluator(save_path, metric=&#34;wioa&#34;, threshold=&#39;otsu&#39;, layer_ordering=None):
+    return evaluator.Evaluator(save_path, metric, threshold, layer_ordering)
+
+
+@wraps(gcam_utils.save_attention_map)
+def save(attention_map, filename, heatmap):
+    gcam_utils.save_attention_map(filename, attention_map, heatmap)</code></pre>
 </details>
 </section>
 <section>
@@ -46,48 +60,6 @@ def compute_score(attention_map, mask, metric=&#34;wioa&#34;, threshold=0.3):
 <section>
 </section>
 <section>
-<h2 class="section-title" id="header-functions">Functions</h2>
-<dl>
-<dt id="gcam.gcam.compute_score"><code class="name flex">
-<span>def <span class="ident">compute_score</span></span>(<span>attention_map, mask, metric='wioa', threshold=0.3)</span>
-</code></dt>
-<dd>
-<div class="desc"></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def compute_score(attention_map, mask, metric=&#34;wioa&#34;, threshold=0.3):
-    return score_utils.comp_score(attention_map, mask, metric, threshold)</code></pre>
-</details>
-</dd>
-<dt id="gcam.gcam.get_layers"><code class="name flex">
-<span>def <span class="ident">get_layers</span></span>(<span>model, reverse=False)</span>
-</code></dt>
-<dd>
-<div class="desc"></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def get_layers(model, reverse=False):
-    return gcam_utils.get_layers(model, reverse)</code></pre>
-</details>
-</dd>
-<dt id="gcam.gcam.inject"><code class="name flex">
-<span>def <span class="ident">inject</span></span>(<span>*args, **kwargs)</span>
-</code></dt>
-<dd>
-<div class="desc"></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def inject(*args, **kwargs):
-    gcam_inject.inject(*args, **kwargs)</code></pre>
-</details>
-</dd>
-</dl>
 </section>
 <section>
 </section>
@@ -101,13 +73,6 @@ def compute_score(attention_map, mask, metric=&#34;wioa&#34;, threshold=0.3):
 <li><h3>Super-module</h3>
 <ul>
 <li><code><a title="gcam" href="index.html">gcam</a></code></li>
-</ul>
-</li>
-<li><h3><a href="#header-functions">Functions</a></h3>
-<ul class="">
-<li><code><a title="gcam.gcam.compute_score" href="#gcam.gcam.compute_score">compute_score</a></code></li>
-<li><code><a title="gcam.gcam.get_layers" href="#gcam.gcam.get_layers">get_layers</a></code></li>
-<li><code><a title="gcam.gcam.inject" href="#gcam.gcam.inject">inject</a></code></li>
 </ul>
 </li>
 </ul>

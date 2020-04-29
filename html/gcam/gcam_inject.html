@@ -28,195 +28,340 @@
 from pathlib import Path
 import types
 import pickle
-import pandas as pd
 from gcam import gcam_utils
 from gcam.backends.guided_backpropagation import GuidedBackPropagation
 from gcam.backends.grad_cam import GradCAM
 from gcam.backends.guided_grad_cam import GuidedGradCam
 from gcam.backends.grad_cam_pp import GradCamPP
-from gcam import score_utils
 from collections import defaultdict
+from gcam.evaluation.evaluator import Evaluator
 import copy
 import numpy as np
 
 # TODO: Set requirements in setup.py
 
-def inject(model, output_dir=None, backend=&#34;gcam&#34;, layer=&#39;auto&#39;, input_key=None, mask_key=None, postprocessor=None,
-           retain_graph=False, dim=2, save_scores=False, save_maps=False, save_pickle=False, evaluate=False, metric=&#34;wioa&#34;,
-           return_score=False, threshold=0.3, registered_only=False):
-    # torch.backends.cudnn.enabled = False # TODO: out of memory
+def inject(model, output_dir=None, backend=&#39;gcam&#39;, layer=&#39;auto&#39;, channels=&#39;default&#39;, data_shape=&#39;default&#39;, postprocessor=None, label=None,
+           save_maps=False, save_pickle=False, save_scores=False, evaluate=False, metric=&#39;wioa&#39;, threshold=&#39;otsu&#39;, retain_graph=False,
+           return_score=False, replace=False, cudnn=True, test_batch=None, enabled=True):
+    &#34;&#34;&#34;
+    Injects a model with gcam functionality to extract attention maps from it. The model can be used as usual.
+    Whenever model(input) or model.forward(input) is called gcam will extract the corresponding attention maps.
+    Args:
+        model: A CNN-based model that inherits from torch.nn.Module
+        output_dir: The directory to save any results to
+        backend: One of the implemented visualization backends.
+
+                &#39;gbp&#39;: Guided-Backpropagation
+
+                &#39;gcam&#39;: Grad-Cam
+
+                &#39;ggcam&#39;: Guided-Grad-Cam
+
+                &#39;gcampp&#39;: Grad-Cam++
+
+        layer: One or multiple layer names of the model from which attention maps will be extracted.
+
+                &#39;auto&#39;: Selects the last layer from which attention maps can be extracted.
+
+                &#39;full&#39;: Selects every layer from which attention maps can be extracted.
+
+                (layer name): A layer name of the model as string.
+
+                [(layer name 1), (layer name 2), ...]: A list of layer names of the model as string.
+
+            Note: Guided-Backpropagation ignores this parameter.
+
+        channels: The number of channels the attention maps should have. Some models (e.g. segmentation models) use the channel dimension for class discrimination. For these models the number of channels should corresponds to the number of classes.
+
+                &#39;default&#39;: The number of channels of the current input data.
+
+        data_shape: The shape of the resulting attention maps. The given shape should exclude batch and channel dimension.
+
+                &#39;default&#39;: The shape of the current input data, excluding batch and channel dimension.
+
+        postprocessor: The postprocessor is applied on the model output from calling forward which is then passed to the class discriminator. It converts the raw logit output from the model to a usable form for the class discriminator. The postprocessor is only applied internally, the final output given to the user is not effected.
+
+                None: No postprocessing is applied.
+
+                &#39;sigmoid&#39;: Applies the sigmoid function.
+
+                &#39;softmax&#39;: Applies softmax function.
+
+                (A function): Applies a given function to the output.
+
+        label: A class discriminator that creates a mask on the postprocessed output. Only the non masked logits are backwarded through the model.
+
+                Example: label=lambda x: 0.5 &lt; x
+
+        save_maps: If the attention maps should be saved sorted by layer in the output_dir.
+
+        save_pickle: If the attention maps should be saved as a pickle file in the output_dir.
+
+        save_scores: If the evaluation scores should be saved as an excel file in the output_dir.
+
+        evaluate: If the attention maps should be evaluated. This requires a corresponding mask when calling model.forward().
+
+        metric: An evaluation metric for comparing the attention map with the mask.
+
+                &#39;wioa&#39;: Weighted intersection over attention. Most suited for classification.
+
+                &#39;ioa&#39;: Intersection over attention.
+
+                &#39;iou&#39;: Intersection over union. Not suited for classification.
+
+                (A function): An evaluation function.
+
+        threshold: A threshold used during evaluation for ignoring low attention. Most models have low amounts of attention everywhere in an attention map due to the nature of CNN-based models. The threshold can be used to ignore these low amounts if wanted.
+
+                &#39;otsu&#39;: Uses the otsu algorithm to determine a threshold.
+
+                (float): A value between 0 and 1 that is used as threshold.
+
+        retain_graph: If the computation graph should be retained or not.
+
+        return_score: If the evaluation evaluation of the current input should be returned in addition to the model output.
+
+        replace: If the model output should be replaced with the extracted attention map.
+
+        cudnn: If cudnn should be disabled. Some models (e.g. LSTMs) crash when using gcam with enabled cudnn.
+
+        test_batch: A test input. This allows gcam to determine compatible layers.
+
+        enabled: If gcam should be enabled.
+
+    Returns: A shallow copy of the model injected with gcam functionality.
+
+    &#34;&#34;&#34;
+
+    if _already_injected(model):
+        return
+
+    if not cudnn:
+        torch.backends.cudnn.enabled = False
+
     if output_dir is not None:
         Path(output_dir).mkdir(parents=True, exist_ok=True)
 
-    model.eval()
-    model_backend = copy.deepcopy(model)
-    model_backend, heatmap = _assign_backend(backend, model_backend, layer, postprocessor, retain_graph, dim, registered_only)
+    model_clone = copy.copy(model)
+    model_clone.eval()
+    # Save the original forward of the model
+    # This forward will be called by the backend, so if someone writes a new backend they only need to call model.model_forward and not model.gcam_dict[&#39;model_forward&#39;]
+    setattr(model_clone, &#39;model_forward&#39;, model_clone.forward)
 
-    # Save every attribute in a dict which is added to the model attributes
-    # It is ugly but it avoids name conflicts
+    # # Save every other attribute in a dict which is added to the model attributes
+    # # It is ugly but it avoids name conflicts
     gcam_dict = {}
 
     gcam_dict[&#39;output_dir&#39;] = output_dir
     gcam_dict[&#39;layer&#39;] = layer
-    gcam_dict[&#39;input_key&#39;] = input_key
-    gcam_dict[&#39;mask_key&#39;] = mask_key
-    gcam_dict[&#39;model_backend&#39;] = model_backend
-    gcam_dict[&#39;heatmap&#39;] = heatmap
     gcam_dict[&#39;counter&#39;] = 0
-    gcam_dict[&#39;dim&#39;] = dim
     gcam_dict[&#39;save_scores&#39;] = save_scores
     gcam_dict[&#39;save_maps&#39;] = save_maps
     gcam_dict[&#39;save_pickle&#39;] = save_pickle
     gcam_dict[&#39;evaluate&#39;] = evaluate
     gcam_dict[&#39;metric&#39;] = metric
     gcam_dict[&#39;return_score&#39;] = return_score
-    gcam_dict[&#39;_replace_output&#39;] = False
+    gcam_dict[&#39;_replace_output&#39;] = replace
     gcam_dict[&#39;threshold&#39;] = threshold
+    gcam_dict[&#39;label&#39;] = label
+    gcam_dict[&#39;channels&#39;] = channels
+    gcam_dict[&#39;data_shape&#39;] = data_shape
     gcam_dict[&#39;pickle_maps&#39;] = []
-    gcam_dict[&#39;scores&#39;] = defaultdict(list)
+    gcam_dict[&#39;Evaluator&#39;] = Evaluator(output_dir + &#34;/&#34;, metric=metric, threshold=threshold, layer_ordering=gcam_utils.get_layers(model_clone))
     gcam_dict[&#39;current_attention_map&#39;] = None
     gcam_dict[&#39;current_layer&#39;] = None
-    gcam_dict[&#39;device&#39;] = next(model.parameters()).device
-    setattr(model, &#39;gcam_dict&#39;, gcam_dict)
+    gcam_dict[&#39;device&#39;] = next(model_clone.parameters()).device
+    gcam_dict[&#39;tested&#39;] = False
+    gcam_dict[&#39;enabled&#39;] = enabled
+    setattr(model_clone, &#39;gcam_dict&#39;, gcam_dict)
 
     if output_dir is None and (save_scores is not None or save_maps is not None or save_pickle is not None):
-        raise AttributeError(&#34;output_dir needs to be set if save_scores, save_maps or save_pickle is set to true&#34;)
+        raise ValueError(&#34;output_dir needs to be set if save_scores, save_maps or save_pickle is set to true&#34;)
 
-    model.get_layers = types.MethodType(get_layers, model)
-    model.get_attention_map = types.MethodType(get_attention_map, model)
-    model.save_attention_map = types.MethodType(save_attention_map, model)
-    model.replace_output = types.MethodType(replace_output, model)
-    model.dump = types.MethodType(dump, model)
-    model.forward = types.MethodType(forward, model)
+    # Append methods methods to the model
+    model_clone.get_layers = types.MethodType(get_layers, model_clone)
+    model_clone.get_attention_map = types.MethodType(get_attention_map, model_clone)
+    model_clone.save_attention_map = types.MethodType(save_attention_map, model_clone)
+    model_clone.replace_output = types.MethodType(replace_output, model_clone)
+    model_clone.dump = types.MethodType(dump, model_clone)
+    model_clone.forward = types.MethodType(forward, model_clone)
+    model_clone.enable_gcam = types.MethodType(enable_gcam, model_clone)
+    model_clone.disable_gcam = types.MethodType(disable_gcam, model_clone)
+    model_clone.test_run = types.MethodType(test_run, model_clone)
 
-    model._assign_backend = types.MethodType(_assign_backend, model)
-    model._unpack_batch = types.MethodType(_unpack_batch, model)
-    model._process_attention_maps = types.MethodType(_process_attention_maps, model)
-    model._save_file = types.MethodType(_save_attention_map, model)
-    model._comp_score = types.MethodType(_comp_score, model)
-    model._comp_mean_score = types.MethodType(_comp_mean_score, model)
-    model._scores2csv = types.MethodType(_scores2csv, model)
+    model_clone._assign_backend = types.MethodType(_assign_backend, model_clone)
+    model_clone._process_attention_maps = types.MethodType(_process_attention_maps, model_clone)
+    model_clone._save_attention_map = types.MethodType(_save_attention_map, model_clone)
+    model_clone._replace_output = types.MethodType(_replace_output, model_clone)
+    model_clone._extract_metadata = types.MethodType(_extract_metadata, model_clone)
 
+    model_backend, heatmap = _assign_backend(backend, model_clone, layer, postprocessor, retain_graph)
+    gcam_dict[&#39;model_backend&#39;] = model_backend
+    gcam_dict[&#39;heatmap&#39;] = heatmap
+
+    model_clone.test_run(test_batch)
+
+    return model_clone
 
 def get_layers(self, reverse=False):
+    &#34;&#34;&#34;Returns the layers of the model. Optionally reverses the order of the layers.&#34;&#34;&#34;
     return self.gcam_dict[&#39;model_backend&#39;].layers(reverse)
 
 def get_attention_map(self):
+    &#34;&#34;&#34;Returns the current attention map.&#34;&#34;&#34;
     return self.gcam_dict[&#39;current_attention_map&#39;]
 
 def save_attention_map(self, attention_map):
+    &#34;&#34;&#34;Saves an attention map.&#34;&#34;&#34;
     gcam_utils.save_attention_map(filename=self.gcam_dict[&#39;output_dir&#39;] + &#34;/&#34; + self.gcam_dict[&#39;current_layer&#39;] + &#34;/attention_map_&#34; +
-                                           str(self.gcam_dict[&#39;counter&#39;]), attention_map=attention_map, heatmap=self.gcam_dict[&#39;heatmap&#39;], dim=self.gcam_dict[&#39;dim&#39;])
+                                           str(self.gcam_dict[&#39;counter&#39;]), attention_map=attention_map, heatmap=self.gcam_dict[&#39;heatmap&#39;])
     self.gcam_dict[&#39;counter&#39;] += 1
 
 def replace_output(self, replace):
+    &#34;&#34;&#34;If the output should be replaced with the corresponiding attention map.&#34;&#34;&#34;
     self.gcam_dict[&#39;_replace_output&#39;] = replace
 
-def dump(self, show=True):
+def dump(self):
+    &#34;&#34;&#34;Saves all of the collected data to the output directory.&#34;&#34;&#34;
     if self.gcam_dict[&#39;save_pickle&#39;]:
         with open(self.gcam_dict[&#39;output_dir&#39;] + &#39;/attention_maps.pkl&#39;, &#39;wb&#39;) as handle:  # TODO: Save every 1GB
             pickle.dump(self.gcam_dict[&#39;pickle_maps&#39;], handle, protocol=pickle.HIGHEST_PROTOCOL)
-    mean_scores = self._comp_mean_score(show)
     if self.gcam_dict[&#39;save_scores&#39;]:
-        self._scores2csv(mean_scores)
+        self.gcam_dict[&#39;Evaluator&#39;].dump()
 
 def forward(self, batch, label=None, mask=None):
-    # print(&#34;-------------------------- FORWARD GCAM HOOK --------------------------&#34;)
-    self.gcam_dict[&#39;model_backend&#39;].model.eval()
-    with torch.enable_grad():
-        batch_size, data_shape = self._unpack_batch(batch)
-        output = self.gcam_dict[&#39;model_backend&#39;].forward(batch, data_shape)
-        self.gcam_dict[&#39;model_backend&#39;].backward(output=output, label=label)  # TODO: Check if I can remove output
-        attention_map = self.gcam_dict[&#39;model_backend&#39;].generate()
-        if len(attention_map.keys()) == 1:
-            self.gcam_dict[&#39;current_attention_map&#39;] = attention_map[list(attention_map.keys())[0]][0]
-            #self.gcam_dict[&#39;current_attention_map&#39;] = gradcam_utils.normalize(self.gcam_dict[&#39;current_attention_map&#39;])*255.0
-            #self.gcam_dict[&#39;current_attention_map&#39;] = torch.tensor(self.gcam_dict[&#39;current_attention_map&#39;]).unsqueeze(0).unsqueeze(0).to(str(self.gcam_dict[&#39;device&#39;]))
-            self.gcam_dict[&#39;current_layer&#39;] = list(attention_map.keys())[0]
-        scores = self._process_attention_maps(attention_map, batch, mask, batch_size)
-        if self.gcam_dict[&#39;_replace_output&#39;]:
-            if len(attention_map.keys()) == 1:
-                output = torch.tensor(self.gcam_dict[&#39;current_attention_map&#39;]).unsqueeze(0).unsqueeze(0).to(str(self.gcam_dict[&#39;device&#39;]))
+    &#34;&#34;&#34;
+    Generates attention maps for a given batch input.
+    Args:
+        batch: An input batch of shape (BxCxHxW) or (BxCxDxHxW).
+        label: A class label (int) or a class discriminator function to different attention maps for every class.
+        mask: A ground truth mask corresponding to the input batch. Only needed when evaluate is set to true.
+
+    Returns: Either the normal output of the model or an attention map.
+
+    &#34;&#34;&#34;
+    if self.gcam_dict[&#39;enabled&#39;]:
+        if self.gcam_dict[&#39;layer&#39;] == &#39;full&#39; and not self.gcam_dict[&#39;tested&#39;]:
+            raise ValueError(&#34;Layer mode &#39;full&#39; requires a test run either during injection or by calling test_run() afterwards&#34;)
+        with torch.enable_grad():
+            output = self.gcam_dict[&#39;model_backend&#39;].forward(batch)
+            batch_size, channels, data_shape = self._extract_metadata(output)
+            self.gcam_dict[&#39;model_backend&#39;].backward(label=label)
+            attention_map = self.gcam_dict[&#39;model_backend&#39;].generate()
+            if attention_map:
+                if len(attention_map.keys()) == 1:
+                    self.gcam_dict[&#39;current_attention_map&#39;] = attention_map[list(attention_map.keys())[0]]
+                    self.gcam_dict[&#39;current_layer&#39;] = list(attention_map.keys())[0]
+                scores = self._process_attention_maps(attention_map, mask, batch_size, channels)
+                output = self._replace_output(output, attention_map, data_shape)
+            else:  # If no attention maps could be extracted
+                self.gcam_dict[&#39;current_attention_map&#39;] = None
+                self.gcam_dict[&#39;current_layer&#39;] = None
+                scores = None
+                if self.gcam_dict[&#39;_replace_output&#39;]:
+                    raise ValueError(&#34;Unable to extract any attention maps&#34;)
+            self.gcam_dict[&#39;counter&#39;] += 1
+            if self.gcam_dict[&#39;return_score&#39;]:
+                return output, scores
             else:
-                raise RuntimeError(&#34;Not possible to replace output when layer is &#39;full&#39;, only with &#39;auto&#39; or a manually set layer&#34;)
-        if self.gcam_dict[&#39;return_score&#39;]:
-            return output, scores
-        else:
-            #output = gradcam_utils.normalize(output) * 255.0
-            return output
+                return output
+    else:
+        return self.model_forward(batch)
 
-def _assign_backend(backend, model, target_layers, postprocessor, retain_graph, dim, registered_only):
+def test_run(self, batch):
+    &#34;&#34;&#34;Performs a test run. This allows gcam to determine for which layers it can generate attention maps.&#34;&#34;&#34;
+    registered_hooks = []
+    if batch is not None and not self.gcam_dict[&#39;tested&#39;]:
+        with torch.enable_grad():
+            output = self.gcam_dict[&#39;model_backend&#39;].forward(batch)
+            self.gcam_dict[&#39;model_backend&#39;].backward()
+            registered_hooks = self.gcam_dict[&#39;model_backend&#39;].get_registered_hooks()
+        self.gcam_dict[&#39;tested&#39;] = True
+        print(&#34;Successfully registered to the following layers: &#34;, registered_hooks)
+        if self.gcam_dict[&#39;output_dir&#39;] is not None:
+            np.savetxt(self.gcam_dict[&#39;output_dir&#39;] + &#39;/registered_layers.txt&#39;, np.asarray(registered_hooks).astype(str), fmt=&#34;%s&#34;)
+    return registered_hooks
+
+def disable_gcam(self):
+    &#34;&#34;&#34;Disables gcam.&#34;&#34;&#34;
+    self.gcam_dict[&#39;enabled&#39;] = False
+
+def enable_gcam(self):
+    &#34;&#34;&#34;Enables gcam.&#34;&#34;&#34;
+    self.gcam_dict[&#39;enabled&#39;] = True
+
+def _already_injected(model):
+    &#34;&#34;&#34;Checks if the model is already injected with gcam.&#34;&#34;&#34;
+    try:  # try/except is faster than hasattr, if inject method is called repeatedly
+        model.gcam_dict  # Check if attribute exists
+        return True
+    except AttributeError:
+        return False
+
+def _assign_backend(backend, model, target_layers, postprocessor, retain_graph):
+    &#34;&#34;&#34;Assigns a chosen backend.&#34;&#34;&#34;
     if backend == &#34;gbp&#34;:
-        return GuidedBackPropagation(model=model, postprocessor=postprocessor, retain_graph=retain_graph, dim=dim), False
+        return GuidedBackPropagation(model=model, postprocessor=postprocessor, retain_graph=retain_graph), False
     elif backend == &#34;gcam&#34;:
-        return GradCAM(model=model, target_layers=target_layers, postprocessor=postprocessor, retain_graph=retain_graph, dim=dim, registered_only=registered_only), True
+        return GradCAM(model=model, target_layers=target_layers, postprocessor=postprocessor, retain_graph=retain_graph), True
     elif backend == &#34;ggcam&#34;:
-        return GuidedGradCam(model=model, target_layers=target_layers, postprocessor=postprocessor, retain_graph=retain_graph, dim=dim), False
+        return GuidedGradCam(model=model, target_layers=target_layers, postprocessor=postprocessor, retain_graph=retain_graph), False
     elif backend == &#34;gcampp&#34;:
-        return GradCamPP(model=model, target_layers=target_layers, postprocessor=postprocessor, retain_graph=retain_graph, dim=dim), True
+        return GradCamPP(model=model, target_layers=target_layers, postprocessor=postprocessor, retain_graph=retain_graph), True
     else:
-        raise TypeError(&#34;Backend does not exist&#34;)
+        raise ValueError(&#34;Backend does not exist&#34;)
 
-def _unpack_batch(self, batch):
-    if self.gcam_dict[&#39;input_key&#39;] is None:
-        data_shape = batch.shape[-self.gcam_dict[&#39;dim&#39;]:]
-        batch_size = batch.shape[0]
-    else:
-        data_shape = batch[self.gcam_dict[&#39;input_key&#39;]].shape[-self.gcam_dict[&#39;dim&#39;]:]
-        batch_size = batch[self.gcam_dict[&#39;input_key&#39;]].shape[0]
-    return batch_size, data_shape
-
-def _process_attention_maps(self, attention_map, batch, mask, batch_size):
+def _process_attention_maps(self, attention_map, mask, batch_size, channels):
+    &#34;&#34;&#34;Handles all the stuff after the attention map has been generated. Like creating dictionaries, saving the attention map and doing the evaluation.&#34;&#34;&#34;
     batch_scores = defaultdict(list) if self.gcam_dict[&#39;evaluate&#39;] else None
     for layer_name in attention_map.keys():
         layer_output_dir = None
-        if self.gcam_dict[&#39;output_dir&#39;] is not None:
+        if self.gcam_dict[&#39;output_dir&#39;] is not None and self.gcam_dict[&#39;save_maps&#39;]:
             if layer_name == &#34;&#34;:
                 layer_output_dir = self.gcam_dict[&#39;output_dir&#39;]
             else:
                 layer_output_dir = self.gcam_dict[&#39;output_dir&#39;] + &#34;/&#34; + layer_name
             Path(layer_output_dir).mkdir(parents=True, exist_ok=True)
         for j in range(batch_size):
-            attention_map_j = attention_map[layer_name][j]
-            self._save_file(attention_map_j, layer_output_dir)
-            if self.gcam_dict[&#39;evaluate&#39;]:
-                score = self._comp_score(attention_map_j, batch, mask[j].squeeze())
-                batch_scores[layer_name].append(score)
-                self.gcam_dict[&#39;scores&#39;][layer_name].append(score)
+            for k in range(channels):
+                attention_map_single = attention_map[layer_name][j][k]
+                self._save_attention_map(attention_map_single, layer_output_dir, j, k)
+                if self.gcam_dict[&#39;evaluate&#39;]:
+                    if mask is None:
+                        raise ValueError(&#34;Mask cannot be none in evaluation mode&#34;)
+                    score = self.gcam_dict[&#39;Evaluator&#39;].comp_score(attention_map_single, mask[j][k].squeeze(), layer=layer_name, class_label=k)
+                    batch_scores[layer_name].append(score)
     return batch_scores
 
-def _save_attention_map(self, attention_map, layer_output_dir):
+def _save_attention_map(self, attention_map, layer_output_dir, j, k):
+    &#34;&#34;&#34;Internal method for saving saving an attention map.&#34;&#34;&#34;
     if self.gcam_dict[&#39;save_pickle&#39;]:
         self.gcam_dict[&#39;pickle_maps&#39;].append(attention_map)
     if self.gcam_dict[&#39;save_maps&#39;]:
-        gcam_utils.save_attention_map(filename=layer_output_dir + &#34;/attention_map_&#34; + str(self.gcam_dict[&#39;counter&#39;]), attention_map=attention_map, heatmap=self.gcam_dict[&#39;heatmap&#39;], dim=self.gcam_dict[&#39;dim&#39;])
-        self.gcam_dict[&#39;counter&#39;] += 1
+        gcam_utils.save_attention_map(filename=layer_output_dir + &#34;/attention_map_&#34; + str(self.gcam_dict[&#39;counter&#39;]) + &#34;_&#34; + str(j) + &#34;_&#34; + str(k), attention_map=attention_map, heatmap=self.gcam_dict[&#39;heatmap&#39;])
 
-def _comp_score(self, attention_map, batch, mask):  # TODO: Not multiclass compatible, maybe multiclass parameter in init?
-    if self.gcam_dict[&#39;mask_key&#39;] is not None:
-        mask = batch[self.gcam_dict[&#39;mask_key&#39;]]
-    elif mask is None:
-        raise AttributeError(&#34;Either mask_key during initialization or mask during forward needs to be set&#34;)
-    return score_utils.comp_score(attention_map, mask, self.gcam_dict[&#39;metric&#39;], self.gcam_dict[&#39;threshold&#39;])
+def _replace_output(self, output, attention_map, data_shape):
+    &#34;&#34;&#34;Replaces the model output with the current attention map.&#34;&#34;&#34;
+    if self.gcam_dict[&#39;_replace_output&#39;]:
+        if len(attention_map.keys()) == 1:
+            output = torch.tensor(self.gcam_dict[&#39;current_attention_map&#39;]).to(str(self.gcam_dict[&#39;device&#39;]))
+            output = gcam_utils.interpolate(output, data_shape)
+        else:
+            raise ValueError(&#34;Not possible to replace output when layer is &#39;full&#39;, only with &#39;auto&#39; or a manually set layer&#34;)
+    return output
 
-def _comp_mean_score(self, show):
-    mean_scores = defaultdict(float)
-    for layer_name in self.gcam_dict[&#39;scores&#39;].keys():
-        mean_score = np.mean(self.gcam_dict[&#39;scores&#39;][layer_name])
-        mean_scores[layer_name] = mean_score
-        if show:
-            print(&#34;Layer: {}, mean score: {}&#34;.format(layer_name, mean_score))
-    return mean_scores
-
-def _scores2csv(self, mean_scores):
-    df = pd.DataFrame.from_dict(self.gcam_dict[&#39;scores&#39;])
-    new_entry = pd.DataFrame([mean_scores.values()], columns=mean_scores.keys())
-    score_ids = list(range(len(df)))
-    score_ids = list(map(str, score_ids))
-    score_ids.append(&#34;Mean&#34;)
-    df = df.append(new_entry)
-    df.insert(0, &#34;Layer&#34;, score_ids, True)
-    df.to_csv(self.gcam_dict[&#39;output_dir&#39;] + &#34;/scores.csv&#34;, index=False)</code></pre>
+def _extract_metadata(self, data):  # TODO: Does not work for classification output (shape: (1, 1000))
+    &#34;&#34;&#34;Extracts metadata like batch size, number of channels and the data shape from the input batch.&#34;&#34;&#34;
+    batch_size = data.shape[0]
+    if self.gcam_dict[&#39;channels&#39;] == &#39;default&#39;:
+        channels = data.shape[1]
+    else:
+        channels = self.gcam_dict[&#39;channels&#39;]
+    if self.gcam_dict[&#39;data_shape&#39;] == &#39;default&#39;:
+        data_shape = data.shape[2:]
+    else:
+        data_shape = self.model.gcam_dict[&#39;data_shape&#39;]
+    return batch_size, channels, data_shape</code></pre>
 </details>
 </section>
 <section>
@@ -226,69 +371,122 @@ def _scores2csv(self, mean_scores):
 <section>
 <h2 class="section-title" id="header-functions">Functions</h2>
 <dl>
-<dt id="gcam.gcam_inject.dump"><code class="name flex">
-<span>def <span class="ident">dump</span></span>(<span>self, show=True)</span>
+<dt id="gcam.gcam_inject.disable_gcam"><code class="name flex">
+<span>def <span class="ident">disable_gcam</span></span>(<span>self)</span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>Disables gcam.</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def dump(self, show=True):
+<pre><code class="python">def disable_gcam(self):
+    &#34;&#34;&#34;Disables gcam.&#34;&#34;&#34;
+    self.gcam_dict[&#39;enabled&#39;] = False</code></pre>
+</details>
+</dd>
+<dt id="gcam.gcam_inject.dump"><code class="name flex">
+<span>def <span class="ident">dump</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Saves all of the collected data to the output directory.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def dump(self):
+    &#34;&#34;&#34;Saves all of the collected data to the output directory.&#34;&#34;&#34;
     if self.gcam_dict[&#39;save_pickle&#39;]:
         with open(self.gcam_dict[&#39;output_dir&#39;] + &#39;/attention_maps.pkl&#39;, &#39;wb&#39;) as handle:  # TODO: Save every 1GB
             pickle.dump(self.gcam_dict[&#39;pickle_maps&#39;], handle, protocol=pickle.HIGHEST_PROTOCOL)
-    mean_scores = self._comp_mean_score(show)
     if self.gcam_dict[&#39;save_scores&#39;]:
-        self._scores2csv(mean_scores)</code></pre>
+        self.gcam_dict[&#39;Evaluator&#39;].dump()</code></pre>
+</details>
+</dd>
+<dt id="gcam.gcam_inject.enable_gcam"><code class="name flex">
+<span>def <span class="ident">enable_gcam</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Enables gcam.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def enable_gcam(self):
+    &#34;&#34;&#34;Enables gcam.&#34;&#34;&#34;
+    self.gcam_dict[&#39;enabled&#39;] = True</code></pre>
 </details>
 </dd>
 <dt id="gcam.gcam_inject.forward"><code class="name flex">
 <span>def <span class="ident">forward</span></span>(<span>self, batch, label=None, mask=None)</span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>Generates attention maps for a given batch input.</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>batch</code></strong></dt>
+<dd>An input batch of shape (BxCxHxW) or (BxCxDxHxW).</dd>
+<dt><strong><code>label</code></strong></dt>
+<dd>A class label (int) or a class discriminator function to different attention maps for every class.</dd>
+<dt><strong><code>mask</code></strong></dt>
+<dd>A ground truth mask corresponding to the input batch. Only needed when evaluate is set to true.</dd>
+</dl>
+<p>Returns: Either the normal output of the model or an attention map.</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def forward(self, batch, label=None, mask=None):
-    # print(&#34;-------------------------- FORWARD GCAM HOOK --------------------------&#34;)
-    self.gcam_dict[&#39;model_backend&#39;].model.eval()
-    with torch.enable_grad():
-        batch_size, data_shape = self._unpack_batch(batch)
-        output = self.gcam_dict[&#39;model_backend&#39;].forward(batch, data_shape)
-        self.gcam_dict[&#39;model_backend&#39;].backward(output=output, label=label)  # TODO: Check if I can remove output
-        attention_map = self.gcam_dict[&#39;model_backend&#39;].generate()
-        if len(attention_map.keys()) == 1:
-            self.gcam_dict[&#39;current_attention_map&#39;] = attention_map[list(attention_map.keys())[0]][0]
-            #self.gcam_dict[&#39;current_attention_map&#39;] = gradcam_utils.normalize(self.gcam_dict[&#39;current_attention_map&#39;])*255.0
-            #self.gcam_dict[&#39;current_attention_map&#39;] = torch.tensor(self.gcam_dict[&#39;current_attention_map&#39;]).unsqueeze(0).unsqueeze(0).to(str(self.gcam_dict[&#39;device&#39;]))
-            self.gcam_dict[&#39;current_layer&#39;] = list(attention_map.keys())[0]
-        scores = self._process_attention_maps(attention_map, batch, mask, batch_size)
-        if self.gcam_dict[&#39;_replace_output&#39;]:
-            if len(attention_map.keys()) == 1:
-                output = torch.tensor(self.gcam_dict[&#39;current_attention_map&#39;]).unsqueeze(0).unsqueeze(0).to(str(self.gcam_dict[&#39;device&#39;]))
+    &#34;&#34;&#34;
+    Generates attention maps for a given batch input.
+    Args:
+        batch: An input batch of shape (BxCxHxW) or (BxCxDxHxW).
+        label: A class label (int) or a class discriminator function to different attention maps for every class.
+        mask: A ground truth mask corresponding to the input batch. Only needed when evaluate is set to true.
+
+    Returns: Either the normal output of the model or an attention map.
+
+    &#34;&#34;&#34;
+    if self.gcam_dict[&#39;enabled&#39;]:
+        if self.gcam_dict[&#39;layer&#39;] == &#39;full&#39; and not self.gcam_dict[&#39;tested&#39;]:
+            raise ValueError(&#34;Layer mode &#39;full&#39; requires a test run either during injection or by calling test_run() afterwards&#34;)
+        with torch.enable_grad():
+            output = self.gcam_dict[&#39;model_backend&#39;].forward(batch)
+            batch_size, channels, data_shape = self._extract_metadata(output)
+            self.gcam_dict[&#39;model_backend&#39;].backward(label=label)
+            attention_map = self.gcam_dict[&#39;model_backend&#39;].generate()
+            if attention_map:
+                if len(attention_map.keys()) == 1:
+                    self.gcam_dict[&#39;current_attention_map&#39;] = attention_map[list(attention_map.keys())[0]]
+                    self.gcam_dict[&#39;current_layer&#39;] = list(attention_map.keys())[0]
+                scores = self._process_attention_maps(attention_map, mask, batch_size, channels)
+                output = self._replace_output(output, attention_map, data_shape)
+            else:  # If no attention maps could be extracted
+                self.gcam_dict[&#39;current_attention_map&#39;] = None
+                self.gcam_dict[&#39;current_layer&#39;] = None
+                scores = None
+                if self.gcam_dict[&#39;_replace_output&#39;]:
+                    raise ValueError(&#34;Unable to extract any attention maps&#34;)
+            self.gcam_dict[&#39;counter&#39;] += 1
+            if self.gcam_dict[&#39;return_score&#39;]:
+                return output, scores
             else:
-                raise RuntimeError(&#34;Not possible to replace output when layer is &#39;full&#39;, only with &#39;auto&#39; or a manually set layer&#34;)
-        if self.gcam_dict[&#39;return_score&#39;]:
-            return output, scores
-        else:
-            #output = gradcam_utils.normalize(output) * 255.0
-            return output</code></pre>
+                return output
+    else:
+        return self.model_forward(batch)</code></pre>
 </details>
 </dd>
 <dt id="gcam.gcam_inject.get_attention_map"><code class="name flex">
 <span>def <span class="ident">get_attention_map</span></span>(<span>self)</span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>Returns the current attention map.</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def get_attention_map(self):
+    &#34;&#34;&#34;Returns the current attention map.&#34;&#34;&#34;
     return self.gcam_dict[&#39;current_attention_map&#39;]</code></pre>
 </details>
 </dd>
@@ -296,91 +494,290 @@ def _scores2csv(self, mean_scores):
 <span>def <span class="ident">get_layers</span></span>(<span>self, reverse=False)</span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>Returns the layers of the model. Optionally reverses the order of the layers.</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def get_layers(self, reverse=False):
+    &#34;&#34;&#34;Returns the layers of the model. Optionally reverses the order of the layers.&#34;&#34;&#34;
     return self.gcam_dict[&#39;model_backend&#39;].layers(reverse)</code></pre>
 </details>
 </dd>
 <dt id="gcam.gcam_inject.inject"><code class="name flex">
-<span>def <span class="ident">inject</span></span>(<span>model, output_dir=None, backend='gcam', layer='auto', input_key=None, mask_key=None, postprocessor=None, retain_graph=False, dim=2, save_scores=False, save_maps=False, save_pickle=False, evaluate=False, metric='wioa', return_score=False, threshold=0.3, registered_only=False)</span>
+<span>def <span class="ident">inject</span></span>(<span>model, output_dir=None, backend='gcam', layer='auto', channels='default', data_shape='default', postprocessor=None, label=None, save_maps=False, save_pickle=False, save_scores=False, evaluate=False, metric='wioa', threshold='otsu', retain_graph=False, return_score=False, replace=False, cudnn=True, test_batch=None, enabled=True)</span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>Injects a model with gcam functionality to extract attention maps from it. The model can be used as usual.
+Whenever model(input) or model.forward(input) is called gcam will extract the corresponding attention maps.</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>model</code></strong></dt>
+<dd>A CNN-based model that inherits from torch.nn.Module</dd>
+<dt><strong><code>output_dir</code></strong></dt>
+<dd>The directory to save any results to</dd>
+<dt><strong><code>backend</code></strong></dt>
+<dd>One of the implemented visualization backends.<pre><code>'gbp': Guided-Backpropagation
+
+'gcam': Grad-Cam
+
+'ggcam': Guided-Grad-Cam
+
+'gcampp': Grad-Cam++
+</code></pre>
+</dd>
+<dt><strong><code>layer</code></strong></dt>
+<dd>
+<p>One or multiple layer names of the model from which attention maps will be extracted.</p>
+<pre><code>'auto': Selects the last layer from which attention maps can be extracted.
+
+'full': Selects every layer from which attention maps can be extracted.
+
+(layer name): A layer name of the model as string.
+
+[(layer name 1), (layer name 2), ...]: A list of layer names of the model as string.
+</code></pre>
+<p>Note: Guided-Backpropagation ignores this parameter.</p>
+</dd>
+<dt><strong><code>channels</code></strong></dt>
+<dd>The number of channels the attention maps should have. Some models (e.g. segmentation models) use the channel dimension for class discrimination. For these models the number of channels should corresponds to the number of classes.<pre><code>'default': The number of channels of the current input data.
+</code></pre>
+</dd>
+<dt><strong><code>data_shape</code></strong></dt>
+<dd>The shape of the resulting attention maps. The given shape should exclude batch and channel dimension.<pre><code>'default': The shape of the current input data, excluding batch and channel dimension.
+</code></pre>
+</dd>
+<dt><strong><code>postprocessor</code></strong></dt>
+<dd>The postprocessor is applied on the model output from calling forward which is then passed to the class discriminator. It converts the raw logit output from the model to a usable form for the class discriminator. The postprocessor is only applied internally, the final output given to the user is not effected.<pre><code>None: No postprocessing is applied.
+
+'sigmoid': Applies the sigmoid function.
+
+'softmax': Applies softmax function.
+
+(A function): Applies a given function to the output.
+</code></pre>
+</dd>
+<dt><strong><code>label</code></strong></dt>
+<dd>A class discriminator that creates a mask on the postprocessed output. Only the non masked logits are backwarded through the model.<pre><code>Example: label=lambda x: 0.5 &lt; x
+</code></pre>
+</dd>
+<dt><strong><code>save_maps</code></strong></dt>
+<dd>If the attention maps should be saved sorted by layer in the output_dir.</dd>
+<dt><strong><code>save_pickle</code></strong></dt>
+<dd>If the attention maps should be saved as a pickle file in the output_dir.</dd>
+<dt><strong><code>save_scores</code></strong></dt>
+<dd>If the evaluation scores should be saved as an excel file in the output_dir.</dd>
+<dt><strong><code>evaluate</code></strong></dt>
+<dd>If the attention maps should be evaluated. This requires a corresponding mask when calling model.forward().</dd>
+<dt><strong><code>metric</code></strong></dt>
+<dd>An evaluation metric for comparing the attention map with the mask.<pre><code>'wioa': Weighted intersection over attention. Most suited for classification.
+
+'ioa': Intersection over attention.
+
+'iou': Intersection over union. Not suited for classification.
+
+(A function): An evaluation function.
+</code></pre>
+</dd>
+<dt><strong><code>threshold</code></strong></dt>
+<dd>A threshold used during evaluation for ignoring low attention. Most models have low amounts of attention everywhere in an attention map due to the nature of CNN-based models. The threshold can be used to ignore these low amounts if wanted.<pre><code>'otsu': Uses the otsu algorithm to determine a threshold.
+
+(float): A value between 0 and 1 that is used as threshold.
+</code></pre>
+</dd>
+<dt><strong><code>retain_graph</code></strong></dt>
+<dd>If the computation graph should be retained or not.</dd>
+<dt><strong><code>return_score</code></strong></dt>
+<dd>If the evaluation evaluation of the current input should be returned in addition to the model output.</dd>
+<dt><strong><code>replace</code></strong></dt>
+<dd>If the model output should be replaced with the extracted attention map.</dd>
+<dt><strong><code>cudnn</code></strong></dt>
+<dd>If cudnn should be disabled. Some models (e.g. LSTMs) crash when using gcam with enabled cudnn.</dd>
+<dt><strong><code>test_batch</code></strong></dt>
+<dd>A test input. This allows gcam to determine compatible layers.</dd>
+<dt><strong><code>enabled</code></strong></dt>
+<dd>If gcam should be enabled.</dd>
+</dl>
+<p>Returns: A shallow copy of the model injected with gcam functionality.</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def inject(model, output_dir=None, backend=&#34;gcam&#34;, layer=&#39;auto&#39;, input_key=None, mask_key=None, postprocessor=None,
-           retain_graph=False, dim=2, save_scores=False, save_maps=False, save_pickle=False, evaluate=False, metric=&#34;wioa&#34;,
-           return_score=False, threshold=0.3, registered_only=False):
-    # torch.backends.cudnn.enabled = False # TODO: out of memory
+<pre><code class="python">def inject(model, output_dir=None, backend=&#39;gcam&#39;, layer=&#39;auto&#39;, channels=&#39;default&#39;, data_shape=&#39;default&#39;, postprocessor=None, label=None,
+           save_maps=False, save_pickle=False, save_scores=False, evaluate=False, metric=&#39;wioa&#39;, threshold=&#39;otsu&#39;, retain_graph=False,
+           return_score=False, replace=False, cudnn=True, test_batch=None, enabled=True):
+    &#34;&#34;&#34;
+    Injects a model with gcam functionality to extract attention maps from it. The model can be used as usual.
+    Whenever model(input) or model.forward(input) is called gcam will extract the corresponding attention maps.
+    Args:
+        model: A CNN-based model that inherits from torch.nn.Module
+        output_dir: The directory to save any results to
+        backend: One of the implemented visualization backends.
+
+                &#39;gbp&#39;: Guided-Backpropagation
+
+                &#39;gcam&#39;: Grad-Cam
+
+                &#39;ggcam&#39;: Guided-Grad-Cam
+
+                &#39;gcampp&#39;: Grad-Cam++
+
+        layer: One or multiple layer names of the model from which attention maps will be extracted.
+
+                &#39;auto&#39;: Selects the last layer from which attention maps can be extracted.
+
+                &#39;full&#39;: Selects every layer from which attention maps can be extracted.
+
+                (layer name): A layer name of the model as string.
+
+                [(layer name 1), (layer name 2), ...]: A list of layer names of the model as string.
+
+            Note: Guided-Backpropagation ignores this parameter.
+
+        channels: The number of channels the attention maps should have. Some models (e.g. segmentation models) use the channel dimension for class discrimination. For these models the number of channels should corresponds to the number of classes.
+
+                &#39;default&#39;: The number of channels of the current input data.
+
+        data_shape: The shape of the resulting attention maps. The given shape should exclude batch and channel dimension.
+
+                &#39;default&#39;: The shape of the current input data, excluding batch and channel dimension.
+
+        postprocessor: The postprocessor is applied on the model output from calling forward which is then passed to the class discriminator. It converts the raw logit output from the model to a usable form for the class discriminator. The postprocessor is only applied internally, the final output given to the user is not effected.
+
+                None: No postprocessing is applied.
+
+                &#39;sigmoid&#39;: Applies the sigmoid function.
+
+                &#39;softmax&#39;: Applies softmax function.
+
+                (A function): Applies a given function to the output.
+
+        label: A class discriminator that creates a mask on the postprocessed output. Only the non masked logits are backwarded through the model.
+
+                Example: label=lambda x: 0.5 &lt; x
+
+        save_maps: If the attention maps should be saved sorted by layer in the output_dir.
+
+        save_pickle: If the attention maps should be saved as a pickle file in the output_dir.
+
+        save_scores: If the evaluation scores should be saved as an excel file in the output_dir.
+
+        evaluate: If the attention maps should be evaluated. This requires a corresponding mask when calling model.forward().
+
+        metric: An evaluation metric for comparing the attention map with the mask.
+
+                &#39;wioa&#39;: Weighted intersection over attention. Most suited for classification.
+
+                &#39;ioa&#39;: Intersection over attention.
+
+                &#39;iou&#39;: Intersection over union. Not suited for classification.
+
+                (A function): An evaluation function.
+
+        threshold: A threshold used during evaluation for ignoring low attention. Most models have low amounts of attention everywhere in an attention map due to the nature of CNN-based models. The threshold can be used to ignore these low amounts if wanted.
+
+                &#39;otsu&#39;: Uses the otsu algorithm to determine a threshold.
+
+                (float): A value between 0 and 1 that is used as threshold.
+
+        retain_graph: If the computation graph should be retained or not.
+
+        return_score: If the evaluation evaluation of the current input should be returned in addition to the model output.
+
+        replace: If the model output should be replaced with the extracted attention map.
+
+        cudnn: If cudnn should be disabled. Some models (e.g. LSTMs) crash when using gcam with enabled cudnn.
+
+        test_batch: A test input. This allows gcam to determine compatible layers.
+
+        enabled: If gcam should be enabled.
+
+    Returns: A shallow copy of the model injected with gcam functionality.
+
+    &#34;&#34;&#34;
+
+    if _already_injected(model):
+        return
+
+    if not cudnn:
+        torch.backends.cudnn.enabled = False
+
     if output_dir is not None:
         Path(output_dir).mkdir(parents=True, exist_ok=True)
 
-    model.eval()
-    model_backend = copy.deepcopy(model)
-    model_backend, heatmap = _assign_backend(backend, model_backend, layer, postprocessor, retain_graph, dim, registered_only)
+    model_clone = copy.copy(model)
+    model_clone.eval()
+    # Save the original forward of the model
+    # This forward will be called by the backend, so if someone writes a new backend they only need to call model.model_forward and not model.gcam_dict[&#39;model_forward&#39;]
+    setattr(model_clone, &#39;model_forward&#39;, model_clone.forward)
 
-    # Save every attribute in a dict which is added to the model attributes
-    # It is ugly but it avoids name conflicts
+    # # Save every other attribute in a dict which is added to the model attributes
+    # # It is ugly but it avoids name conflicts
     gcam_dict = {}
 
     gcam_dict[&#39;output_dir&#39;] = output_dir
     gcam_dict[&#39;layer&#39;] = layer
-    gcam_dict[&#39;input_key&#39;] = input_key
-    gcam_dict[&#39;mask_key&#39;] = mask_key
-    gcam_dict[&#39;model_backend&#39;] = model_backend
-    gcam_dict[&#39;heatmap&#39;] = heatmap
     gcam_dict[&#39;counter&#39;] = 0
-    gcam_dict[&#39;dim&#39;] = dim
     gcam_dict[&#39;save_scores&#39;] = save_scores
     gcam_dict[&#39;save_maps&#39;] = save_maps
     gcam_dict[&#39;save_pickle&#39;] = save_pickle
     gcam_dict[&#39;evaluate&#39;] = evaluate
     gcam_dict[&#39;metric&#39;] = metric
     gcam_dict[&#39;return_score&#39;] = return_score
-    gcam_dict[&#39;_replace_output&#39;] = False
+    gcam_dict[&#39;_replace_output&#39;] = replace
     gcam_dict[&#39;threshold&#39;] = threshold
+    gcam_dict[&#39;label&#39;] = label
+    gcam_dict[&#39;channels&#39;] = channels
+    gcam_dict[&#39;data_shape&#39;] = data_shape
     gcam_dict[&#39;pickle_maps&#39;] = []
-    gcam_dict[&#39;scores&#39;] = defaultdict(list)
+    gcam_dict[&#39;Evaluator&#39;] = Evaluator(output_dir + &#34;/&#34;, metric=metric, threshold=threshold, layer_ordering=gcam_utils.get_layers(model_clone))
     gcam_dict[&#39;current_attention_map&#39;] = None
     gcam_dict[&#39;current_layer&#39;] = None
-    gcam_dict[&#39;device&#39;] = next(model.parameters()).device
-    setattr(model, &#39;gcam_dict&#39;, gcam_dict)
+    gcam_dict[&#39;device&#39;] = next(model_clone.parameters()).device
+    gcam_dict[&#39;tested&#39;] = False
+    gcam_dict[&#39;enabled&#39;] = enabled
+    setattr(model_clone, &#39;gcam_dict&#39;, gcam_dict)
 
     if output_dir is None and (save_scores is not None or save_maps is not None or save_pickle is not None):
-        raise AttributeError(&#34;output_dir needs to be set if save_scores, save_maps or save_pickle is set to true&#34;)
+        raise ValueError(&#34;output_dir needs to be set if save_scores, save_maps or save_pickle is set to true&#34;)
 
-    model.get_layers = types.MethodType(get_layers, model)
-    model.get_attention_map = types.MethodType(get_attention_map, model)
-    model.save_attention_map = types.MethodType(save_attention_map, model)
-    model.replace_output = types.MethodType(replace_output, model)
-    model.dump = types.MethodType(dump, model)
-    model.forward = types.MethodType(forward, model)
+    # Append methods methods to the model
+    model_clone.get_layers = types.MethodType(get_layers, model_clone)
+    model_clone.get_attention_map = types.MethodType(get_attention_map, model_clone)
+    model_clone.save_attention_map = types.MethodType(save_attention_map, model_clone)
+    model_clone.replace_output = types.MethodType(replace_output, model_clone)
+    model_clone.dump = types.MethodType(dump, model_clone)
+    model_clone.forward = types.MethodType(forward, model_clone)
+    model_clone.enable_gcam = types.MethodType(enable_gcam, model_clone)
+    model_clone.disable_gcam = types.MethodType(disable_gcam, model_clone)
+    model_clone.test_run = types.MethodType(test_run, model_clone)
 
-    model._assign_backend = types.MethodType(_assign_backend, model)
-    model._unpack_batch = types.MethodType(_unpack_batch, model)
-    model._process_attention_maps = types.MethodType(_process_attention_maps, model)
-    model._save_file = types.MethodType(_save_attention_map, model)
-    model._comp_score = types.MethodType(_comp_score, model)
-    model._comp_mean_score = types.MethodType(_comp_mean_score, model)
-    model._scores2csv = types.MethodType(_scores2csv, model)</code></pre>
+    model_clone._assign_backend = types.MethodType(_assign_backend, model_clone)
+    model_clone._process_attention_maps = types.MethodType(_process_attention_maps, model_clone)
+    model_clone._save_attention_map = types.MethodType(_save_attention_map, model_clone)
+    model_clone._replace_output = types.MethodType(_replace_output, model_clone)
+    model_clone._extract_metadata = types.MethodType(_extract_metadata, model_clone)
+
+    model_backend, heatmap = _assign_backend(backend, model_clone, layer, postprocessor, retain_graph)
+    gcam_dict[&#39;model_backend&#39;] = model_backend
+    gcam_dict[&#39;heatmap&#39;] = heatmap
+
+    model_clone.test_run(test_batch)
+
+    return model_clone</code></pre>
 </details>
 </dd>
 <dt id="gcam.gcam_inject.replace_output"><code class="name flex">
 <span>def <span class="ident">replace_output</span></span>(<span>self, replace)</span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>If the output should be replaced with the corresponiding attention map.</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def replace_output(self, replace):
+    &#34;&#34;&#34;If the output should be replaced with the corresponiding attention map.&#34;&#34;&#34;
     self.gcam_dict[&#39;_replace_output&#39;] = replace</code></pre>
 </details>
 </dd>
@@ -388,15 +785,40 @@ def _scores2csv(self, mean_scores):
 <span>def <span class="ident">save_attention_map</span></span>(<span>self, attention_map)</span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>Saves an attention map.</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def save_attention_map(self, attention_map):
+    &#34;&#34;&#34;Saves an attention map.&#34;&#34;&#34;
     gcam_utils.save_attention_map(filename=self.gcam_dict[&#39;output_dir&#39;] + &#34;/&#34; + self.gcam_dict[&#39;current_layer&#39;] + &#34;/attention_map_&#34; +
-                                           str(self.gcam_dict[&#39;counter&#39;]), attention_map=attention_map, heatmap=self.gcam_dict[&#39;heatmap&#39;], dim=self.gcam_dict[&#39;dim&#39;])
+                                           str(self.gcam_dict[&#39;counter&#39;]), attention_map=attention_map, heatmap=self.gcam_dict[&#39;heatmap&#39;])
     self.gcam_dict[&#39;counter&#39;] += 1</code></pre>
+</details>
+</dd>
+<dt id="gcam.gcam_inject.test_run"><code class="name flex">
+<span>def <span class="ident">test_run</span></span>(<span>self, batch)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Performs a test run. This allows gcam to determine for which layers it can generate attention maps.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def test_run(self, batch):
+    &#34;&#34;&#34;Performs a test run. This allows gcam to determine for which layers it can generate attention maps.&#34;&#34;&#34;
+    registered_hooks = []
+    if batch is not None and not self.gcam_dict[&#39;tested&#39;]:
+        with torch.enable_grad():
+            output = self.gcam_dict[&#39;model_backend&#39;].forward(batch)
+            self.gcam_dict[&#39;model_backend&#39;].backward()
+            registered_hooks = self.gcam_dict[&#39;model_backend&#39;].get_registered_hooks()
+        self.gcam_dict[&#39;tested&#39;] = True
+        print(&#34;Successfully registered to the following layers: &#34;, registered_hooks)
+        if self.gcam_dict[&#39;output_dir&#39;] is not None:
+            np.savetxt(self.gcam_dict[&#39;output_dir&#39;] + &#39;/registered_layers.txt&#39;, np.asarray(registered_hooks).astype(str), fmt=&#34;%s&#34;)
+    return registered_hooks</code></pre>
 </details>
 </dd>
 </dl>
@@ -417,13 +839,16 @@ def _scores2csv(self, mean_scores):
 </li>
 <li><h3><a href="#header-functions">Functions</a></h3>
 <ul class="two-column">
+<li><code><a title="gcam.gcam_inject.disable_gcam" href="#gcam.gcam_inject.disable_gcam">disable_gcam</a></code></li>
 <li><code><a title="gcam.gcam_inject.dump" href="#gcam.gcam_inject.dump">dump</a></code></li>
+<li><code><a title="gcam.gcam_inject.enable_gcam" href="#gcam.gcam_inject.enable_gcam">enable_gcam</a></code></li>
 <li><code><a title="gcam.gcam_inject.forward" href="#gcam.gcam_inject.forward">forward</a></code></li>
 <li><code><a title="gcam.gcam_inject.get_attention_map" href="#gcam.gcam_inject.get_attention_map">get_attention_map</a></code></li>
 <li><code><a title="gcam.gcam_inject.get_layers" href="#gcam.gcam_inject.get_layers">get_layers</a></code></li>
 <li><code><a title="gcam.gcam_inject.inject" href="#gcam.gcam_inject.inject">inject</a></code></li>
 <li><code><a title="gcam.gcam_inject.replace_output" href="#gcam.gcam_inject.replace_output">replace_output</a></code></li>
 <li><code><a title="gcam.gcam_inject.save_attention_map" href="#gcam.gcam_inject.save_attention_map">save_attention_map</a></code></li>
+<li><code><a title="gcam.gcam_inject.test_run" href="#gcam.gcam_inject.test_run">test_run</a></code></li>
 </ul>
 </li>
 </ul>

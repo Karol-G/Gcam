@@ -9,47 +9,45 @@ import operator
 
 MIN_SHAPE = (500, 500)
 
-def save_attention_map(filename, attention_map, heatmap, data=None):
+def save_attention_map(filename, attention_map, heatmap):
+    """
+    Saves an attention maps.
+    Args:
+        filename: The save path, including the name, excluding the file extension.
+        attention_map: The attention map in HxW or DxHxW format.
+        heatmap: If the attiention map should be saved as a heatmap. True for gcam and gcampp. False for gbp and ggcam.
+    """
     dim = len(attention_map.shape)
     attention_map = normalize(attention_map.astype(np.float))
-    attention_map = generate_attention_map(attention_map, heatmap, dim, data)
+    attention_map = generate_attention_map(attention_map, heatmap, dim)
     _save_file(filename, attention_map, dim)
 
-def generate_attention_map(attention_map, heatmap, dim, data=None):
+def generate_attention_map(attention_map, heatmap, dim):
     if dim == 2:
         if heatmap:
-            return generate_gcam2d(attention_map, data)
+            return generate_gcam2d(attention_map)
         else:
             return generate_guided_bp2d(attention_map)
     elif dim == 3:
         if heatmap:
-            return generate_gcam3d(attention_map, data)
+            return generate_gcam3d(attention_map)
         else:
             return generate_guided_bp3d(attention_map)
     else:
         raise RuntimeError("Unsupported dimension. Only 2D and 3D data is supported.")
 
-def generate_gcam2d(attention_map, data=None):
+def generate_gcam2d(attention_map):
     assert(len(attention_map.shape) == 2)  # No batch dim
     assert(isinstance(attention_map, np.ndarray))  # Not a tensor
-    assert(isinstance(data, np.ndarray) or isinstance(data, str) or data is None)  # Not PIL
-    assert(data is None or len(data.shape) == 2 or data.shape[2] == 3)  # Format (h,w) or (h,w,c)
 
-    if data is not None:
-        data = _load_data(data)
-        attention_map = _resize_attention_map(attention_map, data.shape[:2])
-        cmap = cm.jet_r(attention_map)[..., :3] * 255.0
-        attention_map = (cmap.astype(np.float) + data.astype(np.float)) / 2
-    else:
-        attention_map = _resize_attention_map(attention_map, MIN_SHAPE)
-        attention_map = cm.jet_r(attention_map)[..., :3] * 255.0
+    attention_map = _resize_attention_map(attention_map, MIN_SHAPE)
+    attention_map = cm.jet_r(attention_map)[..., :3] * 255.0
     return np.uint8(attention_map)
 
 def generate_guided_bp2d(attention_map):
     assert(len(attention_map.shape) == 2)
     assert (isinstance(attention_map, np.ndarray))  # Not a tensor
-    # attention_map -= np.min(attention_map)
-    # attention_map /= np.max(attention_map)
+
     attention_map *= 255.0
     attention_map = _resize_attention_map(attention_map, MIN_SHAPE)
     return np.uint8(attention_map)
@@ -60,23 +58,14 @@ def generate_gcam3d(attention_map, data=None):
     assert(isinstance(data, np.ndarray) or data is None)  # Not PIL
     assert(data is None or len(data.shape) == 3)
 
-    if data is not None:
-        attention_map = _resize_attention_map(attention_map, data.shape[:3])
-        cmap = cm.jet_r(attention_map)[..., :3] * 255.0
-        attention_map = (cmap.astype(np.float) + data.astype(np.float)) / 2
-    else:
-        # attention_map = _resize_attention_map(attention_map, MIN_SHAPE)
-        #attention_map = cm.jet_r(attention_map)[..., :3] * 255.0
-        attention_map *= 255.0
+    attention_map *= 255.0
     return np.uint8(attention_map)
 
 def generate_guided_bp3d(attention_map):
     assert(len(attention_map.shape) == 3)
     assert (isinstance(attention_map, np.ndarray))  # Not a tensor
-    # attention_map -= np.min(attention_map)
-    # attention_map /= np.max(attention_map)
+
     attention_map *= 255.0
-    #attention_map = _resize_attention_map(attention_map, MIN_SHAPE)
     return np.uint8(attention_map)
 
 def _load_data(data_path):
@@ -96,6 +85,7 @@ def _resize_attention_map(attention_map, min_shape):
     return attention_map
 
 def normalize(x):
+    """Normalizes data both numpy or tensor data to range [0,1]."""
     if isinstance(x, torch.Tensor):
         if torch.min(x) == torch.max(x):
             return torch.zeros(x.shape)
@@ -109,12 +99,12 @@ def _save_file(filename, attention_map, dim):
     if dim == 2:
         cv2.imwrite(filename + ".png", attention_map)
     else:
-        # attention_map = attention_map.transpose(1, 2, 0, 3)
         attention_map = attention_map.transpose(1, 2, 0)
         attention_map = nib.Nifti1Image(attention_map, affine=np.eye(4))
         nib.save(attention_map, filename + ".nii.gz")
 
 def get_layers(model, reverse=False):
+    """Returns the layers of the model. Optionally reverses the order of the layers."""
     layer_names = []
     for name, _ in model.named_modules():
         layer_names.append(name)
@@ -142,6 +132,7 @@ def get_layers(model, reverse=False):
     return layer_names
 
 def interpolate(data, shape, squeeze=False):
+    """Interpolates data to the size of a given shape. Optionally squeezes away the batch and channel dim if the data was given in HxW or DxHxW format."""
     if isinstance(data, np.ndarray):
         # Lazy solution, numpy and scipy have multiple interpolate methods with only linear or nearest, so I don't know which one to use... + they don't work with batches
         # Should be redone with numpy or scipy though
@@ -156,6 +147,7 @@ def interpolate(data, shape, squeeze=False):
     return data
 
 def _interpolate_tensor(data, shape, squeeze):
+    """Interpolates data to the size of a given shape. Optionally squeezes away the batch and channel dim if the data was given in HxW or DxHxW format."""
     if (len(shape) == 2 and len(data.shape) == 2) or ((len(shape) == 3 and len(data.shape) == 3)):  # Add batch and channel dim
         data = data.unsqueeze(0).unsqueeze(0)
         _squeeze = 2

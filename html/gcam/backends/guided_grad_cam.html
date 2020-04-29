@@ -25,40 +25,47 @@
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">import numpy as np
-import cv2
-from torch import nn
 from gcam.backends.grad_cam import GradCAM
 from gcam.backends.guided_backpropagation import GuidedBackPropagation
+from gcam import gcam_utils
 
 
-class GuidedGradCam(nn.Module):
-    def __init__(self, model, target_layers=None, postprocessor=None, retain_graph=False, dim=2):
-        self.model_GCAM = GradCAM(model=model, target_layers=target_layers, postprocessor=postprocessor, retain_graph=retain_graph, dim=dim)
-        self.model_GBP = GuidedBackPropagation(model=model, postprocessor=postprocessor, retain_graph=retain_graph, dim=dim)
+class GuidedGradCam():
+    &#34;&#34;&#34;
+    &#34;Grad-CAM: Visual Explanations from Deep Networks via Gradient-based Localization&#34;
+    https://arxiv.org/pdf/1610.02391.pdf
+    Look at Figure 2 on page 4
+    &#34;&#34;&#34;
 
-    def forward(self, data, data_shape):
-        self.output_GCAM = self.model_GCAM.forward(data.clone(), data_shape)
-        self.output_GBP = self.model_GBP.forward(data.clone(), data_shape)
+    def __init__(self, model, target_layers=None, postprocessor=None, retain_graph=False):
+        self.model_GCAM = GradCAM(model=model, target_layers=target_layers, postprocessor=postprocessor, retain_graph=retain_graph)
+        self.model_GBP = GuidedBackPropagation(model=model, postprocessor=postprocessor, retain_graph=retain_graph)
+
+    def forward(self, data):
+        &#34;&#34;&#34;Calls the forward() of the backends gbp and gcam.&#34;&#34;&#34;
+        self.output_GCAM = self.model_GCAM.forward(data.clone())
+        self.output_GBP = self.model_GBP.forward(data.clone())
         return self.output_GCAM
 
-    def backward(self, output=None, label=None):
-        self.model_GCAM.backward(output=self.output_GCAM, label=label)
-        self.model_GBP.backward(output=self.output_GBP, label=label)
+    def backward(self, label=None):
+        &#34;&#34;&#34;Calls the backward() of the backends gbp and gcam.&#34;&#34;&#34;
+        self.model_GCAM.backward(label=label)
+        self.model_GBP.backward(label=label)
+
+    def get_registered_hooks(self):
+        &#34;&#34;&#34;Returns every hook that was able to register to a layer.&#34;&#34;&#34;
+        return self.model_GCAM.get_registered_hooks()
 
     def generate(self):
+        &#34;&#34;&#34;Generates an attention map.&#34;&#34;&#34;
         attention_map_GCAM = self.model_GCAM.generate()
         attention_map_GBP = self.model_GBP.generate()[&#34;&#34;]
         for layer_name in attention_map_GCAM.keys():
-            for i in range(len(attention_map_GCAM[layer_name])):
-                if attention_map_GBP[i].shape == attention_map_GCAM[layer_name][i].shape:
-                    attention_map_GCAM[layer_name][i] = np.multiply(attention_map_GCAM[layer_name][i], attention_map_GBP[i])
-                else:
-                    attention_map_GCAM_tmp = cv2.resize(attention_map_GCAM[layer_name][i], tuple(np.flip(attention_map_GBP[i].shape)))  # TODO: Not compatible with 3D
-                    attention_map_GCAM[layer_name][i] = np.multiply(attention_map_GCAM_tmp, attention_map_GBP[i])
-        # # del self.output_GCAM
-        # # del self.output_GBP
-        # # gc.collect()
-        # # torch.cuda.empty_cache()
+            if attention_map_GBP.shape == attention_map_GCAM[layer_name].shape:
+                attention_map_GCAM[layer_name] = np.multiply(attention_map_GCAM[layer_name], attention_map_GBP)
+            else:
+                attention_map_GCAM_tmp = gcam_utils.interpolate(attention_map_GCAM[layer_name], attention_map_GBP.shape[2:])
+                attention_map_GCAM[layer_name] = np.multiply(attention_map_GCAM_tmp, attention_map_GBP)
         return attention_map_GCAM</code></pre>
 </details>
 </section>
@@ -73,103 +80,84 @@ class GuidedGradCam(nn.Module):
 <dl>
 <dt id="gcam.backends.guided_grad_cam.GuidedGradCam"><code class="flex name class">
 <span>class <span class="ident">GuidedGradCam</span></span>
-<span>(</span><span>model, target_layers=None, postprocessor=None, retain_graph=False, dim=2)</span>
+<span>(</span><span>model, target_layers=None, postprocessor=None, retain_graph=False)</span>
 </code></dt>
 <dd>
-<div class="desc"><p>Base class for all neural network modules.</p>
-<p>Your models should also subclass this class.</p>
-<p>Modules can also contain other Modules, allowing to nest them in
-a tree structure. You can assign the submodules as regular attributes::</p>
-<pre><code>import torch.nn as nn
-import torch.nn.functional as F
-
-class Model(nn.Module):
-    def __init__(self):
-        super(Model, self).__init__()
-        self.conv1 = nn.Conv2d(1, 20, 5)
-        self.conv2 = nn.Conv2d(20, 20, 5)
-
-    def forward(self, x):
-        x = F.relu(self.conv1(x))
-        return F.relu(self.conv2(x))
-</code></pre>
-<p>Submodules assigned in this way will be registered, and will have their
-parameters converted too when you call :meth:<code>to</code>, etc.</p>
-<p>Initializes internal Module state, shared by both nn.Module and ScriptModule.</p></div>
+<div class="desc"><p>"Grad-CAM: Visual Explanations from Deep Networks via Gradient-based Localization"
+<a href="https://arxiv.org/pdf/1610.02391.pdf">https://arxiv.org/pdf/1610.02391.pdf</a>
+Look at Figure 2 on page 4</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">class GuidedGradCam(nn.Module):
-    def __init__(self, model, target_layers=None, postprocessor=None, retain_graph=False, dim=2):
-        self.model_GCAM = GradCAM(model=model, target_layers=target_layers, postprocessor=postprocessor, retain_graph=retain_graph, dim=dim)
-        self.model_GBP = GuidedBackPropagation(model=model, postprocessor=postprocessor, retain_graph=retain_graph, dim=dim)
+<pre><code class="python">class GuidedGradCam():
+    &#34;&#34;&#34;
+    &#34;Grad-CAM: Visual Explanations from Deep Networks via Gradient-based Localization&#34;
+    https://arxiv.org/pdf/1610.02391.pdf
+    Look at Figure 2 on page 4
+    &#34;&#34;&#34;
 
-    def forward(self, data, data_shape):
-        self.output_GCAM = self.model_GCAM.forward(data.clone(), data_shape)
-        self.output_GBP = self.model_GBP.forward(data.clone(), data_shape)
+    def __init__(self, model, target_layers=None, postprocessor=None, retain_graph=False):
+        self.model_GCAM = GradCAM(model=model, target_layers=target_layers, postprocessor=postprocessor, retain_graph=retain_graph)
+        self.model_GBP = GuidedBackPropagation(model=model, postprocessor=postprocessor, retain_graph=retain_graph)
+
+    def forward(self, data):
+        &#34;&#34;&#34;Calls the forward() of the backends gbp and gcam.&#34;&#34;&#34;
+        self.output_GCAM = self.model_GCAM.forward(data.clone())
+        self.output_GBP = self.model_GBP.forward(data.clone())
         return self.output_GCAM
 
-    def backward(self, output=None, label=None):
-        self.model_GCAM.backward(output=self.output_GCAM, label=label)
-        self.model_GBP.backward(output=self.output_GBP, label=label)
+    def backward(self, label=None):
+        &#34;&#34;&#34;Calls the backward() of the backends gbp and gcam.&#34;&#34;&#34;
+        self.model_GCAM.backward(label=label)
+        self.model_GBP.backward(label=label)
+
+    def get_registered_hooks(self):
+        &#34;&#34;&#34;Returns every hook that was able to register to a layer.&#34;&#34;&#34;
+        return self.model_GCAM.get_registered_hooks()
 
     def generate(self):
+        &#34;&#34;&#34;Generates an attention map.&#34;&#34;&#34;
         attention_map_GCAM = self.model_GCAM.generate()
         attention_map_GBP = self.model_GBP.generate()[&#34;&#34;]
         for layer_name in attention_map_GCAM.keys():
-            for i in range(len(attention_map_GCAM[layer_name])):
-                if attention_map_GBP[i].shape == attention_map_GCAM[layer_name][i].shape:
-                    attention_map_GCAM[layer_name][i] = np.multiply(attention_map_GCAM[layer_name][i], attention_map_GBP[i])
-                else:
-                    attention_map_GCAM_tmp = cv2.resize(attention_map_GCAM[layer_name][i], tuple(np.flip(attention_map_GBP[i].shape)))  # TODO: Not compatible with 3D
-                    attention_map_GCAM[layer_name][i] = np.multiply(attention_map_GCAM_tmp, attention_map_GBP[i])
-        # # del self.output_GCAM
-        # # del self.output_GBP
-        # # gc.collect()
-        # # torch.cuda.empty_cache()
+            if attention_map_GBP.shape == attention_map_GCAM[layer_name].shape:
+                attention_map_GCAM[layer_name] = np.multiply(attention_map_GCAM[layer_name], attention_map_GBP)
+            else:
+                attention_map_GCAM_tmp = gcam_utils.interpolate(attention_map_GCAM[layer_name], attention_map_GBP.shape[2:])
+                attention_map_GCAM[layer_name] = np.multiply(attention_map_GCAM_tmp, attention_map_GBP)
         return attention_map_GCAM</code></pre>
 </details>
-<h3>Ancestors</h3>
-<ul class="hlist">
-<li>torch.nn.modules.module.Module</li>
-</ul>
 <h3>Methods</h3>
 <dl>
 <dt id="gcam.backends.guided_grad_cam.GuidedGradCam.backward"><code class="name flex">
-<span>def <span class="ident">backward</span></span>(<span>self, output=None, label=None)</span>
+<span>def <span class="ident">backward</span></span>(<span>self, label=None)</span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>Calls the backward() of the backends gbp and gcam.</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def backward(self, output=None, label=None):
-    self.model_GCAM.backward(output=self.output_GCAM, label=label)
-    self.model_GBP.backward(output=self.output_GBP, label=label)</code></pre>
+<pre><code class="python">def backward(self, label=None):
+    &#34;&#34;&#34;Calls the backward() of the backends gbp and gcam.&#34;&#34;&#34;
+    self.model_GCAM.backward(label=label)
+    self.model_GBP.backward(label=label)</code></pre>
 </details>
 </dd>
 <dt id="gcam.backends.guided_grad_cam.GuidedGradCam.forward"><code class="name flex">
-<span>def <span class="ident">forward</span></span>(<span>self, data, data_shape)</span>
+<span>def <span class="ident">forward</span></span>(<span>self, data)</span>
 </code></dt>
 <dd>
-<div class="desc"><p>Defines the computation performed at every call.</p>
-<p>Should be overridden by all subclasses.</p>
-<div class="admonition note">
-<p class="admonition-title">Note</p>
-<p>Although the recipe for forward pass needs to be defined within
-this function, one should call the :class:<code>Module</code> instance afterwards
-instead of this since the former takes care of running the
-registered hooks while the latter silently ignores them.</p>
-</div></div>
+<div class="desc"><p>Calls the forward() of the backends gbp and gcam.</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def forward(self, data, data_shape):
-    self.output_GCAM = self.model_GCAM.forward(data.clone(), data_shape)
-    self.output_GBP = self.model_GBP.forward(data.clone(), data_shape)
+<pre><code class="python">def forward(self, data):
+    &#34;&#34;&#34;Calls the forward() of the backends gbp and gcam.&#34;&#34;&#34;
+    self.output_GCAM = self.model_GCAM.forward(data.clone())
+    self.output_GBP = self.model_GBP.forward(data.clone())
     return self.output_GCAM</code></pre>
 </details>
 </dd>
@@ -177,26 +165,36 @@ registered hooks while the latter silently ignores them.</p>
 <span>def <span class="ident">generate</span></span>(<span>self)</span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>Generates an attention map.</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def generate(self):
+    &#34;&#34;&#34;Generates an attention map.&#34;&#34;&#34;
     attention_map_GCAM = self.model_GCAM.generate()
     attention_map_GBP = self.model_GBP.generate()[&#34;&#34;]
     for layer_name in attention_map_GCAM.keys():
-        for i in range(len(attention_map_GCAM[layer_name])):
-            if attention_map_GBP[i].shape == attention_map_GCAM[layer_name][i].shape:
-                attention_map_GCAM[layer_name][i] = np.multiply(attention_map_GCAM[layer_name][i], attention_map_GBP[i])
-            else:
-                attention_map_GCAM_tmp = cv2.resize(attention_map_GCAM[layer_name][i], tuple(np.flip(attention_map_GBP[i].shape)))  # TODO: Not compatible with 3D
-                attention_map_GCAM[layer_name][i] = np.multiply(attention_map_GCAM_tmp, attention_map_GBP[i])
-    # # del self.output_GCAM
-    # # del self.output_GBP
-    # # gc.collect()
-    # # torch.cuda.empty_cache()
+        if attention_map_GBP.shape == attention_map_GCAM[layer_name].shape:
+            attention_map_GCAM[layer_name] = np.multiply(attention_map_GCAM[layer_name], attention_map_GBP)
+        else:
+            attention_map_GCAM_tmp = gcam_utils.interpolate(attention_map_GCAM[layer_name], attention_map_GBP.shape[2:])
+            attention_map_GCAM[layer_name] = np.multiply(attention_map_GCAM_tmp, attention_map_GBP)
     return attention_map_GCAM</code></pre>
+</details>
+</dd>
+<dt id="gcam.backends.guided_grad_cam.GuidedGradCam.get_registered_hooks"><code class="name flex">
+<span>def <span class="ident">get_registered_hooks</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Returns every hook that was able to register to a layer.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def get_registered_hooks(self):
+    &#34;&#34;&#34;Returns every hook that was able to register to a layer.&#34;&#34;&#34;
+    return self.model_GCAM.get_registered_hooks()</code></pre>
 </details>
 </dd>
 </dl>
@@ -223,6 +221,7 @@ registered hooks while the latter silently ignores them.</p>
 <li><code><a title="gcam.backends.guided_grad_cam.GuidedGradCam.backward" href="#gcam.backends.guided_grad_cam.GuidedGradCam.backward">backward</a></code></li>
 <li><code><a title="gcam.backends.guided_grad_cam.GuidedGradCam.forward" href="#gcam.backends.guided_grad_cam.GuidedGradCam.forward">forward</a></code></li>
 <li><code><a title="gcam.backends.guided_grad_cam.GuidedGradCam.generate" href="#gcam.backends.guided_grad_cam.GuidedGradCam.generate">generate</a></code></li>
+<li><code><a title="gcam.backends.guided_grad_cam.GuidedGradCam.get_registered_hooks" href="#gcam.backends.guided_grad_cam.GuidedGradCam.get_registered_hooks">get_registered_hooks</a></code></li>
 </ul>
 </li>
 </ul>

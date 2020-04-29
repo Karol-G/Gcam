@@ -28,49 +28,53 @@
 import numpy as np
 from torch.nn import functional as F
 from gcam import gcam_utils
-from torch import nn
 
 
-
-class _BaseWrapper(nn.Module):
-    &#34;&#34;&#34;
-    Please modify forward() and backward() according to your task.
-    &#34;&#34;&#34;
+class _BaseWrapper():
 
     def __init__(self, model, postprocessor=None, retain_graph=False):
-        super(_BaseWrapper, self).__init__()
+        &#34;&#34;&#34;A base wrapper of common functions for the backends.&#34;&#34;&#34;
         self.device = next(model.parameters()).device
         self.retain_graph = retain_graph
         self.model = model
-        self.handlers = []  # a set of hook function handlers
+        self.forward_handlers = []
+        self.backward_handlers = []
         self.postprocessor = postprocessor
 
-    def _encode_one_hot(self, ids):
-        one_hot = torch.zeros_like(self.logits).to(self.device)
-        one_hot.scatter_(1, ids, 1.0)
-        return one_hot
-
     def forward(self, data):
-        &#34;&#34;&#34;
-        Simple classification
-        &#34;&#34;&#34;
+        &#34;&#34;&#34;Calls the forward() of the model.&#34;&#34;&#34;
         self.model.zero_grad()
-        self.logits = self.model(data)
+        self.logits = self.model.model_forward(data)
+        self._extract_metadata(self.logits)
+        self.remove_hook(forward=True, backward=False)
         return self.logits
 
-    def backward(self, output=None, label=None):
-        if output is not None:
-            self.logits = output
+    def backward(self, label=None):
+        &#34;&#34;&#34;Applies postprocessing and class discrimination on the model output and then backwards it.&#34;&#34;&#34;
+        if label is None:
+            label = self.model.gcam_dict[&#39;label&#39;]
 
-        self.logits = self.post_processing(self.postprocessor, self.logits)
-        mask = self._mask_output(output, label)
+        processed_logits = self.post_processing(self.postprocessor, self.logits)
+        self.mask = self._mask_output(processed_logits, label)
 
-        if mask is None:
+        if self.mask is None:
             self.logits.backward(gradient=self.logits, retain_graph=self.retain_graph)
         else:
-            self.logits.backward(gradient=mask, retain_graph=self.retain_graph)
+            self.logits.backward(gradient=self.mask, retain_graph=self.retain_graph)
+        self.remove_hook(forward=True, backward=True)
 
     def post_processing(self, postprocessor, output):
+        &#34;&#34;&#34;The postprocessor is applied on the model output from calling forward which is then passed to the class discriminator. It converts the raw logit output from the model to a usable form for the class discriminator. The postprocessor is only applied internally, the final output given to the user is not effected.
+
+                    None: No postprocessing is applied.
+
+                    &#39;sigmoid&#39;: Applies the sigmoid function.
+
+                    &#39;softmax&#39;: Applies softmax function.
+
+                    (A function): Applies a given function to the output.
+
+        &#34;&#34;&#34;
         if postprocessor is None:
             return output
         elif postprocessor == &#34;sigmoid&#34;:
@@ -80,35 +84,61 @@ class _BaseWrapper(nn.Module):
         elif callable(postprocessor):
             output = postprocessor(output)
         else:
-            raise AttributeError(&#34;Postprocessor does not exist&#34;)
+            raise ValueError(&#34;Postprocessor must be either None, &#39;sigmoid&#39;, &#39;softmax&#39; or a postprocessor function&#34;)
         return output
 
     def _mask_output(self, output, label):
+        &#34;&#34;&#34;Creates a binary mask that is later applied to the postprocessed output.&#34;&#34;&#34;
         if label is None:
             return None
-        elif label == &#34;best&#34;:
+        elif label == &#34;best&#34;:  # Only for classification
             indices = torch.argmax(output).detach().cpu().numpy()
-        elif isinstance(label, int):
+            mask = np.zeros(output.shape)
+            np.put(mask, indices, 1)
+        elif isinstance(label, int):  # Only for classification
             indices = (output == label).nonzero()
-            indices = [index[0] * output.shape[1] + index[1] for index in indices]  # TODO: Not compatible with 3D data
+            indices = [index[0] * output.shape[1] + index[1] for index in indices]
+            mask = np.zeros(output.shape)
+            np.put(mask, indices, 1)
+        elif callable(label):  # Can be used for everything, but is best for segmentation 2D/3D
+            mask = label(output).detach().cpu().numpy()
         else:
-            indices = label(output)
-        mask = np.zeros(output.shape)
-        np.put(mask, indices, 1)
+            raise ValueError(&#34;Label must be either None, &#39;best&#39;, a class label index or a discriminator function&#34;)
         mask = torch.FloatTensor(mask).to(self.device)
         return mask
 
+    def _extract_metadata(self, data):  # TODO: Does not work for classification output (shape: (1, 1000)), merge with the one in gcam_inject
+        &#34;&#34;&#34;Extracts metadata like batch size, number of channels and the data shape from the input batch.&#34;&#34;&#34;
+        self.dim = len(data.shape[2:])
+        self.batch_size = data.shape[0]
+        if self.model.gcam_dict[&#39;channels&#39;] == &#39;default&#39;:
+            self.channels = data.shape[1]
+        else:
+            self.channels = self.model.gcam_dict[&#39;channels&#39;]
+        if self.model.gcam_dict[&#39;data_shape&#39;] == &#39;default&#39;:
+            self.data_shape = data.shape[2:]
+        else:
+            self.data_shape = self.model.gcam_dict[&#39;data_shape&#39;]
+
     def generate(self):
+        &#34;&#34;&#34;Generates an attention map.&#34;&#34;&#34;
         raise NotImplementedError
 
-    def remove_hook(self):
+    def remove_hook(self, forward, backward):
         &#34;&#34;&#34;
         Remove all the forward/backward hook functions
         &#34;&#34;&#34;
-        for handle in self.handlers:
-            handle.remove()
+        if forward:
+            for handle in self.forward_handlers:
+                handle.remove()
+            self.forward_handlers = []
+        if backward:
+            for handle in self.backward_handlers:
+                handle.remove()
+            self.backward_handlers = []
 
     def layers(self, reverse=False):
+        &#34;&#34;&#34;Returns the layers of the model. Optionally reverses the order of the layers.&#34;&#34;&#34;
         return gcam_utils.get_layers(self.model, reverse)</code></pre>
 </details>
 </section>

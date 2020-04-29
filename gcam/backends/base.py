@@ -7,6 +7,7 @@ from gcam import gcam_utils
 class _BaseWrapper():
 
     def __init__(self, model, postprocessor=None, retain_graph=False):
+        """A base wrapper of common functions for the backends."""
         self.device = next(model.parameters()).device
         self.retain_graph = retain_graph
         self.model = model
@@ -14,12 +15,8 @@ class _BaseWrapper():
         self.backward_handlers = []
         self.postprocessor = postprocessor
 
-    def _encode_one_hot(self, ids):
-        one_hot = torch.zeros_like(self.logits).to(self.device)
-        one_hot.scatter_(1, ids, 1.0)
-        return one_hot
-
     def forward(self, data):
+        """Calls the forward() of the model."""
         self.model.zero_grad()
         self.logits = self.model.model_forward(data)
         self._extract_metadata(self.logits)
@@ -27,6 +24,7 @@ class _BaseWrapper():
         return self.logits
 
     def backward(self, label=None):
+        """Applies postprocessing and class discrimination on the model output and then backwards it."""
         if label is None:
             label = self.model.gcam_dict['label']
 
@@ -40,6 +38,17 @@ class _BaseWrapper():
         self.remove_hook(forward=True, backward=True)
 
     def post_processing(self, postprocessor, output):
+        """The postprocessor is applied on the model output from calling forward which is then passed to the class discriminator. It converts the raw logit output from the model to a usable form for the class discriminator. The postprocessor is only applied internally, the final output given to the user is not effected.
+
+                    None: No postprocessing is applied.
+
+                    'sigmoid': Applies the sigmoid function.
+
+                    'softmax': Applies softmax function.
+
+                    (A function): Applies a given function to the output.
+
+        """
         if postprocessor is None:
             return output
         elif postprocessor == "sigmoid":
@@ -53,6 +62,7 @@ class _BaseWrapper():
         return output
 
     def _mask_output(self, output, label):
+        """Creates a binary mask that is later applied to the postprocessed output."""
         if label is None:
             return None
         elif label == "best":  # Only for classification
@@ -72,6 +82,7 @@ class _BaseWrapper():
         return mask
 
     def _extract_metadata(self, data):  # TODO: Does not work for classification output (shape: (1, 1000)), merge with the one in gcam_inject
+        """Extracts metadata like batch size, number of channels and the data shape from the input batch."""
         self.dim = len(data.shape[2:])
         self.batch_size = data.shape[0]
         if self.model.gcam_dict['channels'] == 'default':
@@ -84,6 +95,7 @@ class _BaseWrapper():
             self.data_shape = self.model.gcam_dict['data_shape']
 
     def generate(self):
+        """Generates an attention map."""
         raise NotImplementedError
 
     def remove_hook(self, forward, backward):
@@ -100,4 +112,5 @@ class _BaseWrapper():
             self.backward_handlers = []
 
     def layers(self, reverse=False):
+        """Returns the layers of the model. Optionally reverses the order of the layers."""
         return gcam_utils.get_layers(self.model, reverse)

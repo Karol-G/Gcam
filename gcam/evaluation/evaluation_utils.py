@@ -1,11 +1,11 @@
 import numpy as np
 import torch
-import cv2
 import copy
 from gcam import gcam_utils
 from skimage.filters import threshold_otsu
 
 def comp_score(attention_map, mask, metric="wioa", threshold='otsu'):
+    """Computes an evaluation score for an attention map based on a ground truth mask."""
     if isinstance(mask, torch.Tensor):
         mask = mask.detach().cpu().numpy()
     else:
@@ -29,10 +29,13 @@ def comp_score(attention_map, mask, metric="wioa", threshold='otsu'):
     return score
 
 def _preprocessing(attention_map, mask, attention_threshold):
+    """Interpolates, normalizes and binarizes the attention map."""
     if not np.isfinite(attention_map).all():
         raise ValueError("Attention map contains non finite elements")
     if not np.isfinite(mask).all():
         raise ValueError("Mask contains non finite elements")
+    if np.sum(attention_map < 0) > 0:  # For gbp and ggcam as they contain negative values, which would otherwise falsify the evaluation
+        attention_map = np.abs(attention_map)
     attention_map = gcam_utils.interpolate(attention_map, mask.shape, squeeze=True)
     attention_map = gcam_utils.normalize(attention_map.astype(np.float))
     weights = copy.deepcopy(attention_map)
@@ -47,6 +50,7 @@ def _preprocessing(attention_map, mask, attention_threshold):
     return attention_map, mask, weights
 
 def _intersection_over_attention(binary_attention_map, mask, weights):
+    """(Weighted) intersection over attention. How much of (weighted) total attention is inside the ground truth mask."""
     intersection = binary_attention_map & mask
     if weights is not None:
         intersection = intersection.astype(np.float) * weights
@@ -55,6 +59,7 @@ def _intersection_over_attention(binary_attention_map, mask, weights):
     return ioa
 
 def _intersection_over_union(binary_attention_map, mask, weights):  # TODO: wiou is bad and wrong, maybe not even possible?
+    """Intersection over union."""
     intersection = binary_attention_map & mask
     if weights is not None:
         outer_attention = binary_attention_map - intersection

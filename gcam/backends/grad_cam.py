@@ -9,13 +9,13 @@ from gcam import gcam_utils
 ENABLE_MODULE_HOOK = False
 
 class GradCAM(_BaseWrapper):
-    """
-    "Grad-CAM: Visual Explanations from Deep Networks via Gradient-based Localization"
-    https://arxiv.org/pdf/1610.02391.pdf
-    Look at Figure 2 on page 4
-    """
 
     def __init__(self, model, target_layers=None, postprocessor=None, retain_graph=False):
+        """
+        "Grad-CAM: Visual Explanations from Deep Networks via Gradient-based Localization"
+        https://arxiv.org/pdf/1610.02391.pdf
+        Look at Figure 2 on page 4
+        """
         super(GradCAM, self).__init__(model, postprocessor=postprocessor, retain_graph=retain_graph)
         self.fmap_pool = OrderedDict()
         self.grad_pool = OrderedDict()
@@ -28,6 +28,7 @@ class GradCAM(_BaseWrapper):
         self.registered_hooks = {}
 
     def _register_hooks(self):
+        """Registers the forward and backward hooks to the layers."""
         def forward_hook(key):
             def forward_hook_(module, input, output):
                 self.registered_hooks[key][0] = True
@@ -69,6 +70,7 @@ class GradCAM(_BaseWrapper):
                     self.backward_handlers.append(module.register_backward_hook(backward_hook(name)))
 
     def get_registered_hooks(self):
+        """Returns every hook that was able to register to a layer."""
         registered_hooks = []
         for layer in self.registered_hooks.keys():
             if self.registered_hooks[layer][0] and self.registered_hooks[layer][1]:
@@ -79,13 +81,13 @@ class GradCAM(_BaseWrapper):
         return registered_hooks
 
     def forward(self, data):
+        """Calls the forward() of the base."""
         self._register_hooks()
         return super(GradCAM, self).forward(data)
 
     def generate(self):
+        """Generates an attention map."""
         self.remove_hook(forward=True, backward=True)
-        # print("forward_handlers: ", len(self.forward_handlers))
-        # print("backward_handlers: ", len(self.backward_handlers))
         try:
             attention_maps = {}
             if self._target_layers == "auto":
@@ -108,6 +110,7 @@ class GradCAM(_BaseWrapper):
             raise RuntimeError("Number of set channels ({}) is not a multiple of the feature map channels ({}) in layer: {}".format(self.channels, fmaps.shape[1], layer))
 
     def _auto_layer_selection(self):
+        """Selects the last layer from which attention maps can be generated."""
         # It's ugly but it works ;)
         module_names = self.layers(reverse=True)
         found_valid_layer = False
@@ -141,12 +144,14 @@ class GradCAM(_BaseWrapper):
         return layer, fmaps, grads
 
     def _find(self, pool, target_layer):
+        """Returns the feature maps or gradients for a specific layer."""
         if target_layer in pool.keys():
             return pool[target_layer]
         else:
             raise ValueError("Invalid layer name: {}".format(target_layer))
 
     def _compute_grad_weights(self, grads):
+        """Computes the weights based on the gradients by average pooling."""
         if len(self.data_shape) == 2:
             return F.adaptive_avg_pool2d(grads, 1)
         else:
@@ -163,6 +168,8 @@ class GradCAM(_BaseWrapper):
         return attention_map
 
     def _normalize(self, attention_map):
+        if torch.min(attention_map) == torch.max(attention_map):
+            return torch.zeros(attention_map.shape)
         # Normalization per channel
         B, C, *data_shape = attention_map.shape
         attention_map = attention_map.view(B, C, -1)
@@ -174,6 +181,7 @@ class GradCAM(_BaseWrapper):
         return attention_map
 
     def _check_hooks(self, layer):
+        """Checks if all hooks registered."""
         if not self.registered_hooks[layer][0] and not self.registered_hooks[layer][1]:
             raise ValueError("Neither forward hook nor backward hook did register to layer: " + str(layer))
         elif not self.registered_hooks[layer][0]:
