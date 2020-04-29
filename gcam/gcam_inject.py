@@ -122,8 +122,8 @@ def inject(model, output_dir=None, backend='gcam', layer='auto', channels='defau
     # This forward will be called by the backend, so if someone writes a new backend they only need to call model.model_forward and not model.gcam_dict['model_forward']
     setattr(model_clone, 'model_forward', model_clone.forward)
 
-    # # Save every other attribute in a dict which is added to the model attributes
-    # # It is ugly but it avoids name conflicts
+    # Save every other attribute in a dict which is added to the model attributes
+    # It is ugly but it avoids name conflicts
     gcam_dict = {}
 
     gcam_dict['output_dir'] = output_dir
