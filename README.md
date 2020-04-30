@@ -16,8 +16,8 @@ Grad-Cam, Guided Grad-Cam and Grad-Cam++.
 |              Predicted class               |                       #1 Classification (2D)                        |                       #2 Segmentation (2D)                        |                       #3 Segmentation (3D)                      |
 | :----------------------------------------: | :---------------------------------------------------: | :----------------------------------------------------------: | :-------------------------------------------------------: |
 |                  Image                     |        ![](examples/images/class_2D_image.jpg)          |        ![](examples/images/seg_2D_image.png)          |        ![](examples/images/seg_3D_image.png)         |
-|        Guided backpropagation              |    ![](examples/images/class_2D_gcam.png)      |    ![](examples/images/seg_2D_gcam.png)      |    ![](examples/images/seg_3D_gcam.png)      |
-|                Grad-Cam                    |        ![](examples/images/todo.png)         |        ![](examples/images/todo.png)        |        ![](examples/images/todo.png)         |
+|          Guided backpropagation               |        ![](examples/images/todo.png)         |        ![](examples/images/todo.png)        |        ![](examples/images/todo.png)         |
+|                 Grad-Cam               |    ![](examples/images/class_2D_gcam.png)      |    ![](examples/images/seg_2D_gcam.png)      |    ![](examples/images/seg_3D_gcam.png)      |
 |             Guided Grad-Cam                |       ![](examples/images/todo.png)       |       ![](examples/images/todo.png)       |       ![](examples/images/todo.png)        |
 |               Grad-Cam++                   |        ![](examples/images/todo.png)         |        ![](examples/images/todo.png)         |        ![](examples/images/todo.png)         |
 
