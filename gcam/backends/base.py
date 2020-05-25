@@ -94,6 +94,19 @@ class _BaseWrapper():
         else:
             self.data_shape = self.model.gcam_dict['data_shape']
 
+    def _normalize(self, attention_map):
+        if torch.min(attention_map) == torch.max(attention_map):
+            return torch.zeros(attention_map.shape)
+        # Normalization per channel
+        B, C, *data_shape = attention_map.shape
+        attention_map = attention_map.view(B, C, -1)
+        attention_map_min = torch.min(attention_map, dim=2, keepdim=True)[0]
+        attention_map_max = torch.max(attention_map, dim=2, keepdim=True)[0]
+        attention_map -= attention_map_min
+        attention_map /= (attention_map_max - attention_map_min)
+        attention_map = attention_map.view(B, C, *data_shape)
+        return attention_map
+
     def generate(self):
         """Generates an attention map."""
         raise NotImplementedError

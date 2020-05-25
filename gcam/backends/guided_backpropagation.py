@@ -36,8 +36,12 @@ class GuidedBackPropagation(_BaseWrapper):
             attention_map = self.data.grad.clone()
             self.data.grad.zero_()
             B, _, *data_shape = attention_map.shape
-            attention_map = attention_map.view(B, self.channels, -1, *data_shape)
+            #attention_map = attention_map.view(B, self.channels, -1, *data_shape)
+            attention_map = attention_map.view(B, 1, -1, *data_shape)
             attention_map = torch.mean(attention_map, dim=2)  # TODO: mean or sum?
+            #attention_map = torch.abs(attention_map)  # TODO: Not good
+            attention_map = attention_map.repeat(1, self.channels, *[1 for _ in range(self.dim)])
+            attention_map = self._normalize(attention_map)
             attention_map = attention_map.cpu().numpy()
             attention_maps = {}
             attention_maps[""] = attention_map
