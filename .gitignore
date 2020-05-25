@@ -123,3 +123,5 @@ tests/test_segmentation/tmp_test.py
 tests/test_classification/tmp_test.py
 
 plot_scores.py
+
+examples/images/Original SIze/

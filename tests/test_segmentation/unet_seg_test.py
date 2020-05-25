@@ -78,7 +78,7 @@ class TestSegmentation(unittest.TestCase):
 
     def test_gcampp(self):
         layer = 'full'
-        metric = 'ioa'
+        metric = 'wioa'
         model = gcam.inject(self.model, output_dir="results/unet_seg/gcampp_" + metric, backend="gcampp", layer=layer,
                      postprocessor="sigmoid", evaluate=True, save_scores=True, save_maps=False, save_pickle=False, metric=metric, label=lambda x: 0.5 < x, channels=1)
         model.eval()
