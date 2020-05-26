@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="gcam", # Replace with your own username
-    version="0.0.1",
+    version="0.0.5",
     author="Karol Gotkowski",
     author_email="KarolGotkowski@gmx.de",
     description="An easy to use framework that makes model predictions more interpretable for humans.",
@@ -36,7 +36,6 @@ setuptools.setup(
         'opencv-python',
         'packaging',
         'pandas',
-        'pdoc3',
         'Pillow',
         'pyparsing',
         'python-dateutil',
@@ -46,7 +45,5 @@ setuptools.setup(
         'scipy',
         'SimpleITK',
         'six',
-        'wincertstore',
     ],
-    dependency_links=['https://download.pytorch.org/whl/torch_stable.html'],
 )

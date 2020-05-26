@@ -14,7 +14,6 @@ numpy
 opencv-python
 packaging
 pandas
-pdoc3
 Pillow
 pyparsing
 python-dateutil
@@ -24,4 +23,3 @@ scikit-image
 scipy
 SimpleITK
 six
-wincertstore

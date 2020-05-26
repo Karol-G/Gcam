@@ -141,7 +141,8 @@ def inject(model, output_dir=None, backend='gcam', layer='auto', channels='defau
     gcam_dict['channels'] = channels
     gcam_dict['data_shape'] = data_shape
     gcam_dict['pickle_maps'] = []
-    gcam_dict['Evaluator'] = Evaluator(output_dir + "/", metric=metric, threshold=threshold, layer_ordering=gcam_utils.get_layers(model_clone))
+    if evaluate:
+        gcam_dict['Evaluator'] = Evaluator(output_dir + "/", metric=metric, threshold=threshold, layer_ordering=gcam_utils.get_layers(model_clone))
     gcam_dict['current_attention_map'] = None
     gcam_dict['current_layer'] = None
     gcam_dict['device'] = next(model_clone.parameters()).device
@@ -149,8 +150,8 @@ def inject(model, output_dir=None, backend='gcam', layer='auto', channels='defau
     gcam_dict['enabled'] = enabled
     setattr(model_clone, 'gcam_dict', gcam_dict)
 
-    if output_dir is None and (save_scores is not None or save_maps is not None or save_pickle is not None):
-        raise ValueError("output_dir needs to be set if save_scores, save_maps or save_pickle is set to true")
+    if output_dir is None and (save_scores is not None or save_maps is not None or save_pickle is not None or evaluate):
+        raise ValueError("output_dir needs to be set if save_scores, save_maps, save_pickle or evaluate is set to true")
 
     # Append methods methods to the model
     model_clone.get_layers = types.MethodType(get_layers, model_clone)
