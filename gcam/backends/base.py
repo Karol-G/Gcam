@@ -94,7 +94,7 @@ class _BaseWrapper():
         else:
             self.data_shape = self.model.gcam_dict['data_shape']
 
-    def _normalize(self, attention_map):
+    def _normalize_per_channel(self, attention_map):
         if torch.min(attention_map) == torch.max(attention_map):
             return torch.zeros(attention_map.shape)
         # Normalization per channel

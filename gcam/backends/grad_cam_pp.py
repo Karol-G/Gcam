@@ -21,7 +21,7 @@ class GradCamPP(GradCAM):
         tmp = fmaps.mul(grads.pow(3))
         tmp = tmp.view(B, C, prod(data_shape))
         tmp = tmp.sum(-1, keepdim=True)
-        if len(data_shape):
+        if self.dim == 2:
             tmp = tmp.view(B, C, 1, 1)
         else:
             tmp = tmp.view(B, C, 1, 1, 1)
@@ -39,7 +39,7 @@ class GradCamPP(GradCAM):
 
         positive_gradients = F.relu(torch.mul(prob_weights.exp(), grads))
         weights = (alpha * positive_gradients).view(B, C, -1).sum(-1)
-        if len(data_shape):
+        if self.dim == 2:
             weights = weights.view(B, C, 1, 1)
         else:
             weights = weights.view(B, C, 1, 1, 1)
@@ -48,6 +48,6 @@ class GradCamPP(GradCAM):
         attention_map = attention_map.view(B, self.channels, -1, *data_shape)
         attention_map = torch.sum(attention_map, dim=2)
         attention_map = F.relu(attention_map).detach()
-        attention_map = self._normalize(attention_map)
+        attention_map = self._normalize_per_channel(attention_map)
 
         return attention_map
