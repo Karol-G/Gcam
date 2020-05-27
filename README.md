@@ -56,3 +56,7 @@ for i, (batch, gt_mask) in enumerate(data_loader):
     output = model(batch, mask=gt_mask)
     # more of your code...
 ```
+
+## Demo
+
+You can find a Jupyter Notebook on how to use Gcam with the nnUNet for handeling 3D data inside the folder `demos`.

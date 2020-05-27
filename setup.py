@@ -4,8 +4,8 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setuptools.setup(
-    name="gcam", # Replace with your own username
-    version="0.0.5",
+    name="gcam",
+    version="0.0.6",
     author="Karol Gotkowski",
     author_email="KarolGotkowski@gmx.de",
     description="An easy to use framework that makes model predictions more interpretable for humans.",
