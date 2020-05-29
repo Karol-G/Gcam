@@ -1,6 +1,6 @@
-# Gcam
+# Gcam (Grad-Cam)
 
-Gcam is an easy to use framework that makes model predictions more interpretable for humans. 
+Gcam is an easy to use Pytorch framework that makes model predictions more interpretable for humans. 
 It allows the generation of attention maps with multiple methods like Guided Backpropagation, 
 Grad-Cam, Guided Grad-Cam and Grad-Cam++.
 
@@ -51,14 +51,14 @@ data_loader = DataLoader(dataset, batch_size=1, shuffle=False)
 
 # Inject model with gcam (parameters depend on your model, read the gcam.inject documentation)
 model = gcam.inject(model, output_dir="results", channels=1, postprocessor="sigmoid",
-                    label=lambda x: 0.5 < x, save_maps=True, evaluate=True)
+                    label=lambda x: 0.5 < x, save_maps=True)
 
 # Continue to do what you're doing...
 # In this case inference on some new data
 model.eval()
-for i, (batch, gt_mask) in enumerate(data_loader):
-    # Every time forward is called, attention maps will be generated
-    output = model(batch, mask=gt_mask)
+for i, batch in enumerate(data_loader):
+    # Every time forward is called, attention maps will be generated and saved in the directory "results"
+    output = model(batch)
     # more of your code...
 ```
 
