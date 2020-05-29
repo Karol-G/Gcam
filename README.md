@@ -11,6 +11,10 @@ Grad-Cam, Guided Grad-Cam and Grad-Cam++.
 * Supports Guided Backpropagation, Grad-Cam, Guided Grad-Cam and Grad-Cam++
 * Attention map evaluation with given ground truth masks
 
+## Installation
+You can install Gcam via pip with: <br/>
+`pip install gcam`
+
 ## Examples
 
 |                                            |                #1 Classification (2D)                 |                  #2 Segmentation (2D)                 |                       #3 Segmentation (3D)            |
@@ -27,7 +31,7 @@ Grad-Cam, Guided Grad-Cam and Grad-Cam++.
 * Install Pytorch from https://pytorch.org/get-started/locally/
 * Run `python setup.py sdist bdist_wheel` to create the gcam package in the `dist` directory
 * Navigate to `dist` with `cd dist`
-* Install gcam with `pip install gcam-0.0.1-py3-none-any.whl`
+* Install gcam with `pip install gcam-XXX-py3-none-any.whl`
 
 ## Install gcam requirements
 
