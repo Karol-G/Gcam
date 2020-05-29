@@ -16,6 +16,10 @@ Grad-Cam, Guided Grad-Cam and Grad-Cam++.
 You can install Gcam via pip with: <br/>
 `pip install gcam`
 
+## Documentation
+Gcam is fully documented and you can view the documentation under: <br/> 
+https://karol-g.github.io/Gcam/
+
 ## Examples
 
 |                                            |                #1 Classification (2D)                 |                  #2 Segmentation (2D)                 |                       #3 Segmentation (3D)            |
