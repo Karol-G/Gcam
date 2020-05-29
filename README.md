@@ -1,4 +1,4 @@
-# Gcam (Grad-Cam, Guided Grad-Cam, Grad-Cam++ and Guided Backpropagation)
+# Gcam (Grad-Cam)
 
 Gcam is an easy to use Pytorch framework that makes model predictions more interpretable for humans. 
 It allows the generation of attention maps with multiple methods like Guided Backpropagation, 
