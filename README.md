@@ -10,6 +10,7 @@ Grad-Cam, Guided Grad-Cam and Grad-Cam++.
 * Works with 2D and 3D data
 * Supports Guided Backpropagation, Grad-Cam, Guided Grad-Cam and Grad-Cam++
 * Attention map evaluation with given ground truth masks
+* Option for automatic layer selection
 
 ## Installation
 You can install Gcam via pip with: <br/>
