@@ -12,8 +12,6 @@ from gcam.evaluation.evaluator import Evaluator
 import copy
 import numpy as np
 
-# TODO: Set requirements in setup.py
-
 def inject(model, output_dir=None, backend='gcam', layer='auto', channels='default', data_shape='default', postprocessor=None, label=None,
            save_maps=False, save_pickle=False, save_scores=False, evaluate=False, metric='wioa', threshold='otsu', retain_graph=False,
            return_score=False, replace=False, cudnn=True, test_batch=None, enabled=True):

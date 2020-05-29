@@ -53,7 +53,6 @@ def generate_guided_bp2d(attention_map):
     return np.uint8(attention_map)
 
 def generate_gcam3d(attention_map, data=None):
-    #assert(len(attention_map.shape) == 3)  # No batch dim
     assert(isinstance(attention_map, np.ndarray))  # Not a tensor
     assert(isinstance(data, np.ndarray) or data is None)  # Not PIL
     assert(data is None or len(data.shape) == 3)

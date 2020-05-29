@@ -162,7 +162,7 @@ class GradCAM(_BaseWrapper):
         attention_map = torch.mul(fmaps, weights)
         B, _, *data_shape = attention_map.shape
         attention_map = attention_map.view(B, self.channels, -1, *data_shape)
-        attention_map = torch.sum(attention_map, dim=2)  # TODO: mean or sum?
+        attention_map = torch.sum(attention_map, dim=2)
         attention_map = F.relu(attention_map)
         attention_map = self._normalize_per_channel(attention_map)
         return attention_map
