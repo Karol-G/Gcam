@@ -1,4 +1,5 @@
 # Gcam (Grad-Cam)
+[![License](https://img.shields.io/badge/License-MIT-brightgreen.svg)](LICENSE)
 
 Gcam is an easy to use Pytorch framework that makes model predictions more interpretable for humans. 
 It allows the generation of attention maps with multiple methods like Guided Backpropagation, 
