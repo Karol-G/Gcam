@@ -104,4 +104,8 @@ ENV/
 .DS_Store
 
 .idea/
-tests/test_classification/tmp.py
+tests/test_classification/tmp_class.py
+
+tests/test_segmentation/tmp_seg.py
+
+tests/results/

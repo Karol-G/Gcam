@@ -33,7 +33,7 @@ class TestClassification(unittest.TestCase):
         return image
 
     def test_gbp(self):
-        model = gcam.inject(self.model, output_dir="results/resnet152/test_gbp", backend="gbp", postprocessor="softmax",
+        model = gcam.inject(self.model, output_dir="results/resnet152/test_gbp", backend="gbp",
                     evaluate=False, save_scores=False, save_maps=False, save_pickle=False, channels=1)
         model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
@@ -49,7 +49,7 @@ class TestClassification(unittest.TestCase):
 
     def test_gcam(self):
         layer = 'layer4'
-        model = gcam.inject(self.model, output_dir="results/resnet152/test_gcam", backend="gcam", layer=layer, postprocessor="softmax",
+        model = gcam.inject(self.model, output_dir="results/resnet152/test_gcam", backend="gcam", layer=layer,
                     evaluate=False, save_scores=False, save_maps=False, save_pickle=False, channels=1)
         model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
@@ -67,7 +67,7 @@ class TestClassification(unittest.TestCase):
 
     def test_ggcam(self):
         layer = 'layer4'
-        model = gcam.inject(self.model, output_dir="results/resnet152/test_ggcam", backend="ggcam", layer=layer, postprocessor="softmax",
+        model = gcam.inject(self.model, output_dir="results/resnet152/test_ggcam", backend="ggcam", layer=layer,
                     evaluate=False, save_scores=False, save_maps=False, save_pickle=False, channels=1)
         model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
@@ -85,7 +85,7 @@ class TestClassification(unittest.TestCase):
 
     def test_gcampp(self):
         layer = 'layer4'
-        model = gcam.inject(self.model, output_dir="results/resnet152/test_gcampp", backend="gcampp", layer=layer, postprocessor="softmax",
+        model = gcam.inject(self.model, output_dir="results/resnet152/test_gcampp", backend="gcampp", layer=layer,
                     evaluate=False, save_scores=False, save_maps=False, save_pickle=False, channels=1)
         model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)

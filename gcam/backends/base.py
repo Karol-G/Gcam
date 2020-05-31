@@ -20,6 +20,7 @@ class _BaseWrapper():
         self.model.zero_grad()
         self.logits = self.model.model_forward(data)
         self._extract_metadata(data, self.logits)
+        self._set_postprocessor(self.logits)
         self.remove_hook(forward=True, backward=False)
         return self.logits
 
@@ -127,3 +128,12 @@ class _BaseWrapper():
     def layers(self, reverse=False):
         """Returns the layers of the model. Optionally reverses the order of the layers."""
         return gcam_utils.get_layers(self.model, reverse)
+
+    def _set_postprocessor(self, output):
+        if self.postprocessor is None:
+            if output.shape[0] == self.output_batch_size and len(output.shape) == 2:  # classification
+                self.postprocessor = "softmax"
+            elif output.shape[0] == self.output_batch_size and len(output.shape) == 4 and output.shape[1] == 1:  # 2D segmentation
+                self.postprocessor = "sigmoid"
+            elif output.shape[0] == self.output_batch_size and len(output.shape) == 4 and output.shape[1] > 1:  # 3D segmentation (nnUNet)
+                self.postprocessor = torch.nn.Softmax(dim=2)
