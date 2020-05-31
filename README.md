@@ -48,7 +48,7 @@ https://karol-g.github.io/Gcam
 
 ## Usage
 
-```
+```python
 # Import gcam
 from gcam import gcam
 
@@ -56,15 +56,14 @@ from gcam import gcam
 model = MyCNN()
 data_loader = DataLoader(dataset, batch_size=1, shuffle=False)
 
-# Inject model with gcam (parameters depend on your model, read the gcam.inject documentation)
-model = gcam.inject(model, output_dir="results", channels=1, postprocessor="sigmoid",
-                    label=lambda x: 0.5 < x, save_maps=True)
+# Inject model with gcam (injection parameters depend on your model, best to read the gcam.inject documentation)
+model = gcam.inject(model, output_dir="attention_maps", save_maps=True)
 
 # Continue to do what you're doing...
 # In this case inference on some new data
 model.eval()
 for i, batch in enumerate(data_loader):
-    # Every time forward is called, attention maps will be generated and saved in the directory "results"
+    # Every time forward is called, attention maps will be generated and saved in the directory "attention_maps"
     output = model(batch)
     # more of your code...
 ```
