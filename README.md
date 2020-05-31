@@ -48,7 +48,7 @@ https://karol-g.github.io/Gcam
 
 ## Usage
 
-```
+```python
 # Import gcam
 from gcam import gcam
 
