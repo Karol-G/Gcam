@@ -57,13 +57,13 @@ model = MyCNN()
 data_loader = DataLoader(dataset, batch_size=1, shuffle=False)
 
 # Inject model with gcam (parameters depend on your model, read the gcam.inject documentation)
-model = gcam.inject(model, output_dir="results", save_maps=True)
+model = gcam.inject(model, output_dir="attention_maps", save_maps=True)
 
 # Continue to do what you're doing...
 # In this case inference on some new data
 model.eval()
 for i, batch in enumerate(data_loader):
-    # Every time forward is called, attention maps will be generated and saved in the directory "results"
+    # Every time forward is called, attention maps will be generated and saved in the directory "attention_maps"
     output = model(batch)
     # more of your code...
 ```
