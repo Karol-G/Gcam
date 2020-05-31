@@ -41,7 +41,7 @@ def save_attention_map(filename, attention_map, heatmap):
     Args:
         filename: The save path, including the name, excluding the file extension.
         attention_map: The attention map in HxW or DxHxW format.
-        heatmap: If the attiention map should be saved as a heatmap. True for gcam and gcampp. False for gbp and ggcam.
+        heatmap: If the attention map should be saved as a heatmap. True for gcam and gcampp. False for gbp and ggcam.
     &#34;&#34;&#34;
     dim = len(attention_map.shape)
     attention_map = normalize(attention_map.astype(np.float))
@@ -79,7 +79,6 @@ def generate_guided_bp2d(attention_map):
     return np.uint8(attention_map)
 
 def generate_gcam3d(attention_map, data=None):
-    #assert(len(attention_map.shape) == 3)  # No batch dim
     assert(isinstance(attention_map, np.ndarray))  # Not a tensor
     assert(isinstance(data, np.ndarray) or data is None)  # Not PIL
     assert(data is None or len(data.shape) == 3)
@@ -252,7 +251,6 @@ def prod(iterable):
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def generate_gcam3d(attention_map, data=None):
-    #assert(len(attention_map.shape) == 3)  # No batch dim
     assert(isinstance(attention_map, np.ndarray))  # Not a tensor
     assert(isinstance(data, np.ndarray) or data is None)  # Not PIL
     assert(data is None or len(data.shape) == 3)
@@ -405,7 +403,7 @@ def prod(iterable):
 <dt><strong><code>attention_map</code></strong></dt>
 <dd>The attention map in HxW or DxHxW format.</dd>
 <dt><strong><code>heatmap</code></strong></dt>
-<dd>If the attiention map should be saved as a heatmap. True for gcam and gcampp. False for gbp and ggcam.</dd>
+<dd>If the attention map should be saved as a heatmap. True for gcam and gcampp. False for gbp and ggcam.</dd>
 </dl></div>
 <details class="source">
 <summary>
@@ -417,7 +415,7 @@ def prod(iterable):
     Args:
         filename: The save path, including the name, excluding the file extension.
         attention_map: The attention map in HxW or DxHxW format.
-        heatmap: If the attiention map should be saved as a heatmap. True for gcam and gcampp. False for gbp and ggcam.
+        heatmap: If the attention map should be saved as a heatmap. True for gcam and gcampp. False for gbp and ggcam.
     &#34;&#34;&#34;
     dim = len(attention_map.shape)
     attention_map = normalize(attention_map.astype(np.float))

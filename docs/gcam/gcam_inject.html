@@ -38,8 +38,6 @@ from gcam.evaluation.evaluator import Evaluator
 import copy
 import numpy as np
 
-# TODO: Set requirements in setup.py
-
 def inject(model, output_dir=None, backend=&#39;gcam&#39;, layer=&#39;auto&#39;, channels=&#39;default&#39;, data_shape=&#39;default&#39;, postprocessor=None, label=None,
            save_maps=False, save_pickle=False, save_scores=False, evaluate=False, metric=&#39;wioa&#39;, threshold=&#39;otsu&#39;, retain_graph=False,
            return_score=False, replace=False, cudnn=True, test_batch=None, enabled=True):
@@ -148,8 +146,8 @@ def inject(model, output_dir=None, backend=&#39;gcam&#39;, layer=&#39;auto&#39;,
     # This forward will be called by the backend, so if someone writes a new backend they only need to call model.model_forward and not model.gcam_dict[&#39;model_forward&#39;]
     setattr(model_clone, &#39;model_forward&#39;, model_clone.forward)
 
-    # # Save every other attribute in a dict which is added to the model attributes
-    # # It is ugly but it avoids name conflicts
+    # Save every other attribute in a dict which is added to the model attributes
+    # It is ugly but it avoids name conflicts
     gcam_dict = {}
 
     gcam_dict[&#39;output_dir&#39;] = output_dir
@@ -167,7 +165,8 @@ def inject(model, output_dir=None, backend=&#39;gcam&#39;, layer=&#39;auto&#39;,
     gcam_dict[&#39;channels&#39;] = channels
     gcam_dict[&#39;data_shape&#39;] = data_shape
     gcam_dict[&#39;pickle_maps&#39;] = []
-    gcam_dict[&#39;Evaluator&#39;] = Evaluator(output_dir + &#34;/&#34;, metric=metric, threshold=threshold, layer_ordering=gcam_utils.get_layers(model_clone))
+    if evaluate:
+        gcam_dict[&#39;Evaluator&#39;] = Evaluator(output_dir + &#34;/&#34;, metric=metric, threshold=threshold, layer_ordering=gcam_utils.get_layers(model_clone))
     gcam_dict[&#39;current_attention_map&#39;] = None
     gcam_dict[&#39;current_layer&#39;] = None
     gcam_dict[&#39;device&#39;] = next(model_clone.parameters()).device
@@ -175,8 +174,8 @@ def inject(model, output_dir=None, backend=&#39;gcam&#39;, layer=&#39;auto&#39;,
     gcam_dict[&#39;enabled&#39;] = enabled
     setattr(model_clone, &#39;gcam_dict&#39;, gcam_dict)
 
-    if output_dir is None and (save_scores is not None or save_maps is not None or save_pickle is not None):
-        raise ValueError(&#34;output_dir needs to be set if save_scores, save_maps or save_pickle is set to true&#34;)
+    if output_dir is None and (save_scores is not None or save_maps is not None or save_pickle is not None or evaluate):
+        raise ValueError(&#34;output_dir needs to be set if save_scores, save_maps, save_pickle or evaluate is set to true&#34;)
 
     # Append methods methods to the model
     model_clone.get_layers = types.MethodType(get_layers, model_clone)
@@ -245,7 +244,7 @@ def forward(self, batch, label=None, mask=None):
             raise ValueError(&#34;Layer mode &#39;full&#39; requires a test run either during injection or by calling test_run() afterwards&#34;)
         with torch.enable_grad():
             output = self.gcam_dict[&#39;model_backend&#39;].forward(batch)
-            batch_size, channels, data_shape = self._extract_metadata(output)
+            batch_size, channels, data_shape = self._extract_metadata(batch, output)
             self.gcam_dict[&#39;model_backend&#39;].backward(label=label)
             attention_map = self.gcam_dict[&#39;model_backend&#39;].generate()
             if attention_map:
@@ -350,18 +349,18 @@ def _replace_output(self, output, attention_map, data_shape):
             raise ValueError(&#34;Not possible to replace output when layer is &#39;full&#39;, only with &#39;auto&#39; or a manually set layer&#34;)
     return output
 
-def _extract_metadata(self, data):  # TODO: Does not work for classification output (shape: (1, 1000))
+def _extract_metadata(self, input, output):  # TODO: Does not work for classification output (shape: (1, 1000))
     &#34;&#34;&#34;Extracts metadata like batch size, number of channels and the data shape from the input batch.&#34;&#34;&#34;
-    batch_size = data.shape[0]
+    output_batch_size = output.shape[0]
     if self.gcam_dict[&#39;channels&#39;] == &#39;default&#39;:
-        channels = data.shape[1]
+        output_channels = output.shape[1]
     else:
-        channels = self.gcam_dict[&#39;channels&#39;]
+        output_channels = self.gcam_dict[&#39;channels&#39;]
     if self.gcam_dict[&#39;data_shape&#39;] == &#39;default&#39;:
-        data_shape = data.shape[2:]
+        output_shape = output.shape[2:]
     else:
-        data_shape = self.model.gcam_dict[&#39;data_shape&#39;]
-    return batch_size, channels, data_shape</code></pre>
+        output_shape = self.model.gcam_dict[&#39;data_shape&#39;]
+    return output_batch_size, output_channels, output_shape</code></pre>
 </details>
 </section>
 <section>
@@ -452,7 +451,7 @@ def _extract_metadata(self, data):  # TODO: Does not work for classification out
             raise ValueError(&#34;Layer mode &#39;full&#39; requires a test run either during injection or by calling test_run() afterwards&#34;)
         with torch.enable_grad():
             output = self.gcam_dict[&#39;model_backend&#39;].forward(batch)
-            batch_size, channels, data_shape = self._extract_metadata(output)
+            batch_size, channels, data_shape = self._extract_metadata(batch, output)
             self.gcam_dict[&#39;model_backend&#39;].backward(label=label)
             attention_map = self.gcam_dict[&#39;model_backend&#39;].generate()
             if attention_map:
@@ -711,8 +710,8 @@ Whenever model(input) or model.forward(input) is called gcam will extract the co
     # This forward will be called by the backend, so if someone writes a new backend they only need to call model.model_forward and not model.gcam_dict[&#39;model_forward&#39;]
     setattr(model_clone, &#39;model_forward&#39;, model_clone.forward)
 
-    # # Save every other attribute in a dict which is added to the model attributes
-    # # It is ugly but it avoids name conflicts
+    # Save every other attribute in a dict which is added to the model attributes
+    # It is ugly but it avoids name conflicts
     gcam_dict = {}
 
     gcam_dict[&#39;output_dir&#39;] = output_dir
@@ -730,7 +729,8 @@ Whenever model(input) or model.forward(input) is called gcam will extract the co
     gcam_dict[&#39;channels&#39;] = channels
     gcam_dict[&#39;data_shape&#39;] = data_shape
     gcam_dict[&#39;pickle_maps&#39;] = []
-    gcam_dict[&#39;Evaluator&#39;] = Evaluator(output_dir + &#34;/&#34;, metric=metric, threshold=threshold, layer_ordering=gcam_utils.get_layers(model_clone))
+    if evaluate:
+        gcam_dict[&#39;Evaluator&#39;] = Evaluator(output_dir + &#34;/&#34;, metric=metric, threshold=threshold, layer_ordering=gcam_utils.get_layers(model_clone))
     gcam_dict[&#39;current_attention_map&#39;] = None
     gcam_dict[&#39;current_layer&#39;] = None
     gcam_dict[&#39;device&#39;] = next(model_clone.parameters()).device
@@ -738,8 +738,8 @@ Whenever model(input) or model.forward(input) is called gcam will extract the co
     gcam_dict[&#39;enabled&#39;] = enabled
     setattr(model_clone, &#39;gcam_dict&#39;, gcam_dict)
 
-    if output_dir is None and (save_scores is not None or save_maps is not None or save_pickle is not None):
-        raise ValueError(&#34;output_dir needs to be set if save_scores, save_maps or save_pickle is set to true&#34;)
+    if output_dir is None and (save_scores is not None or save_maps is not None or save_pickle is not None or evaluate):
+        raise ValueError(&#34;output_dir needs to be set if save_scores, save_maps, save_pickle or evaluate is set to true&#34;)
 
     # Append methods methods to the model
     model_clone.get_layers = types.MethodType(get_layers, model_clone)

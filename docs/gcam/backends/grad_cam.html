@@ -133,7 +133,7 @@ class GradCAM(_BaseWrapper):
                 raise ValueError(&#34;None of the hooks registered to the target layers&#34;)
             return attention_maps
         except RuntimeError:
-            raise RuntimeError(&#34;Number of set channels ({}) is not a multiple of the feature map channels ({}) in layer: {}&#34;.format(self.channels, fmaps.shape[1], layer))
+            raise RuntimeError(&#34;Number of set channels ({}) is not a multiple of the feature map channels ({}) in layer: {}&#34;.format(self.output_channels, fmaps.shape[1], layer))
 
     def _auto_layer_selection(self):
         &#34;&#34;&#34;Selects the last layer from which attention maps can be generated.&#34;&#34;&#34;
@@ -178,7 +178,7 @@ class GradCAM(_BaseWrapper):
 
     def _compute_grad_weights(self, grads):
         &#34;&#34;&#34;Computes the weights based on the gradients by average pooling.&#34;&#34;&#34;
-        if len(self.data_shape) == 2:
+        if len(self.output_shape) == 2:
             return F.adaptive_avg_pool2d(grads, 1)
         else:
             return F.adaptive_avg_pool3d(grads, 1)
@@ -187,23 +187,10 @@ class GradCAM(_BaseWrapper):
         weights = self._compute_grad_weights(grads)
         attention_map = torch.mul(fmaps, weights)
         B, _, *data_shape = attention_map.shape
-        attention_map = attention_map.view(B, self.channels, -1, *data_shape)
-        attention_map = torch.sum(attention_map, dim=2)  # TODO: mean or sum?
+        attention_map = attention_map.view(B, self.output_channels, -1, *data_shape)
+        attention_map = torch.sum(attention_map, dim=2)
         attention_map = F.relu(attention_map)
-        attention_map = self._normalize(attention_map)
-        return attention_map
-
-    def _normalize(self, attention_map):
-        if torch.min(attention_map) == torch.max(attention_map):
-            return torch.zeros(attention_map.shape)
-        # Normalization per channel
-        B, C, *data_shape = attention_map.shape
-        attention_map = attention_map.view(B, C, -1)
-        attention_map_min = torch.min(attention_map, dim=2, keepdim=True)[0]
-        attention_map_max = torch.max(attention_map, dim=2, keepdim=True)[0]
-        attention_map -= attention_map_min
-        attention_map /= (attention_map_max - attention_map_min)
-        attention_map = attention_map.view(B, C, *data_shape)
+        attention_map = self._normalize_per_channel(attention_map)
         return attention_map
 
     def _check_hooks(self, layer):
@@ -336,7 +323,7 @@ Look at Figure 2 on page 4</p></div>
                 raise ValueError(&#34;None of the hooks registered to the target layers&#34;)
             return attention_maps
         except RuntimeError:
-            raise RuntimeError(&#34;Number of set channels ({}) is not a multiple of the feature map channels ({}) in layer: {}&#34;.format(self.channels, fmaps.shape[1], layer))
+            raise RuntimeError(&#34;Number of set channels ({}) is not a multiple of the feature map channels ({}) in layer: {}&#34;.format(self.output_channels, fmaps.shape[1], layer))
 
     def _auto_layer_selection(self):
         &#34;&#34;&#34;Selects the last layer from which attention maps can be generated.&#34;&#34;&#34;
@@ -381,7 +368,7 @@ Look at Figure 2 on page 4</p></div>
 
     def _compute_grad_weights(self, grads):
         &#34;&#34;&#34;Computes the weights based on the gradients by average pooling.&#34;&#34;&#34;
-        if len(self.data_shape) == 2:
+        if len(self.output_shape) == 2:
             return F.adaptive_avg_pool2d(grads, 1)
         else:
             return F.adaptive_avg_pool3d(grads, 1)
@@ -390,23 +377,10 @@ Look at Figure 2 on page 4</p></div>
         weights = self._compute_grad_weights(grads)
         attention_map = torch.mul(fmaps, weights)
         B, _, *data_shape = attention_map.shape
-        attention_map = attention_map.view(B, self.channels, -1, *data_shape)
-        attention_map = torch.sum(attention_map, dim=2)  # TODO: mean or sum?
+        attention_map = attention_map.view(B, self.output_channels, -1, *data_shape)
+        attention_map = torch.sum(attention_map, dim=2)
         attention_map = F.relu(attention_map)
-        attention_map = self._normalize(attention_map)
-        return attention_map
-
-    def _normalize(self, attention_map):
-        if torch.min(attention_map) == torch.max(attention_map):
-            return torch.zeros(attention_map.shape)
-        # Normalization per channel
-        B, C, *data_shape = attention_map.shape
-        attention_map = attention_map.view(B, C, -1)
-        attention_map_min = torch.min(attention_map, dim=2, keepdim=True)[0]
-        attention_map_max = torch.max(attention_map, dim=2, keepdim=True)[0]
-        attention_map -= attention_map_min
-        attention_map /= (attention_map_max - attention_map_min)
-        attention_map = attention_map.view(B, C, *data_shape)
+        attention_map = self._normalize_per_channel(attention_map)
         return attention_map
 
     def _check_hooks(self, layer):
@@ -474,7 +448,7 @@ Look at Figure 2 on page 4</p></div>
             raise ValueError(&#34;None of the hooks registered to the target layers&#34;)
         return attention_maps
     except RuntimeError:
-        raise RuntimeError(&#34;Number of set channels ({}) is not a multiple of the feature map channels ({}) in layer: {}&#34;.format(self.channels, fmaps.shape[1], layer))</code></pre>
+        raise RuntimeError(&#34;Number of set channels ({}) is not a multiple of the feature map channels ({}) in layer: {}&#34;.format(self.output_channels, fmaps.shape[1], layer))</code></pre>
 </details>
 </dd>
 <dt id="gcam.backends.grad_cam.GradCAM.get_registered_hooks"><code class="name flex">

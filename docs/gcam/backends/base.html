@@ -45,7 +45,8 @@ class _BaseWrapper():
         &#34;&#34;&#34;Calls the forward() of the model.&#34;&#34;&#34;
         self.model.zero_grad()
         self.logits = self.model.model_forward(data)
-        self._extract_metadata(self.logits)
+        self._extract_metadata(data, self.logits)
+        self._set_postprocessor(self.logits)
         self.remove_hook(forward=True, backward=False)
         return self.logits
 
@@ -107,18 +108,31 @@ class _BaseWrapper():
         mask = torch.FloatTensor(mask).to(self.device)
         return mask
 
-    def _extract_metadata(self, data):  # TODO: Does not work for classification output (shape: (1, 1000)), merge with the one in gcam_inject
-        &#34;&#34;&#34;Extracts metadata like batch size, number of channels and the data shape from the input batch.&#34;&#34;&#34;
-        self.dim = len(data.shape[2:])
-        self.batch_size = data.shape[0]
+    def _extract_metadata(self, input, output):  # TODO: Does not work for classification output (shape: (1, 1000)), merge with the one in gcam_inject
+        &#34;&#34;&#34;Extracts metadata like batch size, number of channels and the data shape from the output batch.&#34;&#34;&#34;
+        self.input_dim = len(input.shape[2:])
+        self.output_batch_size = output.shape[0]
         if self.model.gcam_dict[&#39;channels&#39;] == &#39;default&#39;:
-            self.channels = data.shape[1]
+            self.output_channels = output.shape[1]
         else:
-            self.channels = self.model.gcam_dict[&#39;channels&#39;]
+            self.output_channels = self.model.gcam_dict[&#39;channels&#39;]
         if self.model.gcam_dict[&#39;data_shape&#39;] == &#39;default&#39;:
-            self.data_shape = data.shape[2:]
+            self.output_shape = output.shape[2:]
         else:
-            self.data_shape = self.model.gcam_dict[&#39;data_shape&#39;]
+            self.output_shape = self.model.gcam_dict[&#39;data_shape&#39;]
+
+    def _normalize_per_channel(self, attention_map):
+        if torch.min(attention_map) == torch.max(attention_map):
+            return torch.zeros(attention_map.shape)
+        # Normalization per channel
+        B, C, *data_shape = attention_map.shape
+        attention_map = attention_map.view(B, C, -1)
+        attention_map_min = torch.min(attention_map, dim=2, keepdim=True)[0]
+        attention_map_max = torch.max(attention_map, dim=2, keepdim=True)[0]
+        attention_map -= attention_map_min
+        attention_map /= (attention_map_max - attention_map_min)
+        attention_map = attention_map.view(B, C, *data_shape)
+        return attention_map
 
     def generate(self):
         &#34;&#34;&#34;Generates an attention map.&#34;&#34;&#34;
@@ -139,7 +153,16 @@ class _BaseWrapper():
 
     def layers(self, reverse=False):
         &#34;&#34;&#34;Returns the layers of the model. Optionally reverses the order of the layers.&#34;&#34;&#34;
-        return gcam_utils.get_layers(self.model, reverse)</code></pre>
+        return gcam_utils.get_layers(self.model, reverse)
+
+    def _set_postprocessor(self, output):
+        if self.postprocessor is None:
+            if output.shape[0] == self.output_batch_size and len(output.shape) == 2:  # classification
+                self.postprocessor = &#34;softmax&#34;
+            elif output.shape[0] == self.output_batch_size and len(output.shape) == 4 and output.shape[1] == 1:  # 2D segmentation
+                self.postprocessor = &#34;sigmoid&#34;
+            elif output.shape[0] == self.output_batch_size and len(output.shape) == 4 and output.shape[1] &gt; 1:  # 3D segmentation (nnUNet)
+                self.postprocessor = torch.nn.Softmax(dim=2)</code></pre>
 </details>
 </section>
 <section>
