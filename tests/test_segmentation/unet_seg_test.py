@@ -16,7 +16,7 @@ class TestSegmentation(unittest.TestCase):
         self.DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.dataset = Dataset(device=self.DEVICE)
         current_path = os.path.dirname(os.path.abspath(__file__))
-        CECKPOINT_PATH = os.path.join(current_path, 'model/CHECKPOINT.pth')
+        CECKPOINT_PATH = os.path.join(current_path, 'model/CHECKPOINT.pth0')
         self.model = UNet(n_channels=3, n_classes=1)
         self.model.load_state_dict(torch.load(CECKPOINT_PATH, map_location=self.DEVICE))
         self.model.to(device=self.DEVICE)
