@@ -56,7 +56,7 @@ from gcam import gcam
 model = MyCNN()
 data_loader = DataLoader(dataset, batch_size=1, shuffle=False)
 
-# Inject model with gcam (injection parameters depend on your model, best to read the gcam.inject documentation)
+# Inject model with gcam
 model = gcam.inject(model, output_dir="attention_maps", save_maps=True)
 
 # Continue to do what you're doing...
