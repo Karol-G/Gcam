@@ -57,8 +57,7 @@ model = MyCNN()
 data_loader = DataLoader(dataset, batch_size=1, shuffle=False)
 
 # Inject model with gcam (parameters depend on your model, read the gcam.inject documentation)
-model = gcam.inject(model, output_dir="results", channels=1, postprocessor="sigmoid",
-                    label=lambda x: 0.5 < x, save_maps=True)
+model = gcam.inject(model, output_dir="results", save_maps=True)
 
 # Continue to do what you're doing...
 # In this case inference on some new data
