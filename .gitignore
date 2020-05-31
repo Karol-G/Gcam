@@ -104,24 +104,4 @@ ENV/
 .DS_Store
 
 .idea/
-legacy/results/
-gcam/grad_cam_plus_plus/outputs/
-data/tumor_seg_data/
-
-models/tumor_seg/images/
-
-data/unet_seg/
-
-data/Task05_Prostate/
-
-results/
-
-tmp.py
-
-tests/test_segmentation/tmp_test.py
-
-tests/test_classification/tmp_test.py
-
-plot_scores.py
-
-examples/images/Original SIze/
+tests/test_classification/tmp.py

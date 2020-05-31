@@ -107,7 +107,7 @@ class GradCAM(_BaseWrapper):
                 raise ValueError("None of the hooks registered to the target layers")
             return attention_maps
         except RuntimeError:
-            raise RuntimeError("Number of set channels ({}) is not a multiple of the feature map channels ({}) in layer: {}".format(self.channels, fmaps.shape[1], layer))
+            raise RuntimeError("Number of set channels ({}) is not a multiple of the feature map channels ({}) in layer: {}".format(self.output_channels, fmaps.shape[1], layer))
 
     def _auto_layer_selection(self):
         """Selects the last layer from which attention maps can be generated."""
@@ -152,7 +152,7 @@ class GradCAM(_BaseWrapper):
 
     def _compute_grad_weights(self, grads):
         """Computes the weights based on the gradients by average pooling."""
-        if len(self.data_shape) == 2:
+        if len(self.output_shape) == 2:
             return F.adaptive_avg_pool2d(grads, 1)
         else:
             return F.adaptive_avg_pool3d(grads, 1)
@@ -161,7 +161,7 @@ class GradCAM(_BaseWrapper):
         weights = self._compute_grad_weights(grads)
         attention_map = torch.mul(fmaps, weights)
         B, _, *data_shape = attention_map.shape
-        attention_map = attention_map.view(B, self.channels, -1, *data_shape)
+        attention_map = attention_map.view(B, self.output_channels, -1, *data_shape)
         attention_map = torch.sum(attention_map, dim=2)
         attention_map = F.relu(attention_map)
         attention_map = self._normalize_per_channel(attention_map)

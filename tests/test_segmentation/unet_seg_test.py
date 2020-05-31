@@ -24,7 +24,7 @@ class TestSegmentation(unittest.TestCase):
 
     def test_gbp(self):
         model = gcam.inject(self.model, output_dir="results/unet_seg/gbp", backend="gbp",
-                     postprocessor="sigmoid", evaluate=True, save_scores=True, save_maps=False, save_pickle=False, metric="wioa", label=lambda x: 0.5 < x, channels=1)
+                     postprocessor="sigmoid", evaluate=True, save_scores=False, save_maps=False, save_pickle=False, metric="wioa", label=lambda x: 0.5 < x, channels=1)
         model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
 
@@ -42,7 +42,7 @@ class TestSegmentation(unittest.TestCase):
         layer = 'full'
         metric = 'wioa'
         model = gcam.inject(self.model, output_dir="results/unet_seg/gcam_" + metric, backend="gcam", layer=layer,
-                                postprocessor="sigmoid", evaluate=True, save_scores=True, save_maps=False, save_pickle=False, metric=metric, label=lambda x: 0.5 < x, channels=1)
+                                postprocessor="sigmoid", evaluate=True, save_scores=False, save_maps=False, save_pickle=False, metric=metric, label=lambda x: 0.5 < x, channels=1)
         model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
         model.test_run(next(iter(data_loader))["img"])
@@ -61,7 +61,7 @@ class TestSegmentation(unittest.TestCase):
         layer = 'full'
         metric = 'wioa'
         model = gcam.inject(self.model, output_dir="results/unet_seg/ggcam_" + metric, backend="ggcam", layer=layer,
-                                postprocessor="sigmoid", evaluate=True, save_scores=True, save_maps=False, save_pickle=False, metric=metric, label=lambda x: 0.5 < x, channels=1)
+                                postprocessor="sigmoid", evaluate=True, save_scores=False, save_maps=False, save_pickle=False, metric=metric, label=lambda x: 0.5 < x, channels=1)
         model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
         model.test_run(next(iter(data_loader))["img"])
@@ -80,7 +80,7 @@ class TestSegmentation(unittest.TestCase):
         layer = 'full'
         metric = 'wioa'
         model = gcam.inject(self.model, output_dir="results/unet_seg/gcampp_" + metric, backend="gcampp", layer=layer,
-                     postprocessor="sigmoid", evaluate=True, save_scores=True, save_maps=False, save_pickle=False, metric=metric, label=lambda x: 0.5 < x, channels=1)
+                     postprocessor="sigmoid", evaluate=True, save_scores=False, save_maps=False, save_pickle=False, metric=metric, label=lambda x: 0.5 < x, channels=1)
         model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
         model.test_run(next(iter(data_loader))["img"])

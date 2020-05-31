@@ -19,7 +19,7 @@ class _BaseWrapper():
         """Calls the forward() of the model."""
         self.model.zero_grad()
         self.logits = self.model.model_forward(data)
-        self._extract_metadata(self.logits)
+        self._extract_metadata(data, self.logits)
         self.remove_hook(forward=True, backward=False)
         return self.logits
 
@@ -81,18 +81,18 @@ class _BaseWrapper():
         mask = torch.FloatTensor(mask).to(self.device)
         return mask
 
-    def _extract_metadata(self, data):  # TODO: Does not work for classification output (shape: (1, 1000)), merge with the one in gcam_inject
-        """Extracts metadata like batch size, number of channels and the data shape from the input batch."""
-        self.dim = len(data.shape[2:])
-        self.batch_size = data.shape[0]
+    def _extract_metadata(self, input, output):  # TODO: Does not work for classification output (shape: (1, 1000)), merge with the one in gcam_inject
+        """Extracts metadata like batch size, number of channels and the data shape from the output batch."""
+        self.input_dim = len(input.shape[2:])
+        self.output_batch_size = output.shape[0]
         if self.model.gcam_dict['channels'] == 'default':
-            self.channels = data.shape[1]
+            self.output_channels = output.shape[1]
         else:
-            self.channels = self.model.gcam_dict['channels']
+            self.output_channels = self.model.gcam_dict['channels']
         if self.model.gcam_dict['data_shape'] == 'default':
-            self.data_shape = data.shape[2:]
+            self.output_shape = output.shape[2:]
         else:
-            self.data_shape = self.model.gcam_dict['data_shape']
+            self.output_shape = self.model.gcam_dict['data_shape']
 
     def _normalize_per_channel(self, attention_map):
         if torch.min(attention_map) == torch.max(attention_map):

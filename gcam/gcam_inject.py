@@ -218,7 +218,7 @@ def forward(self, batch, label=None, mask=None):
             raise ValueError("Layer mode 'full' requires a test run either during injection or by calling test_run() afterwards")
         with torch.enable_grad():
             output = self.gcam_dict['model_backend'].forward(batch)
-            batch_size, channels, data_shape = self._extract_metadata(output)
+            batch_size, channels, data_shape = self._extract_metadata(batch, output)
             self.gcam_dict['model_backend'].backward(label=label)
             attention_map = self.gcam_dict['model_backend'].generate()
             if attention_map:
@@ -323,15 +323,15 @@ def _replace_output(self, output, attention_map, data_shape):
             raise ValueError("Not possible to replace output when layer is 'full', only with 'auto' or a manually set layer")
     return output
 
-def _extract_metadata(self, data):  # TODO: Does not work for classification output (shape: (1, 1000))
+def _extract_metadata(self, input, output):  # TODO: Does not work for classification output (shape: (1, 1000))
     """Extracts metadata like batch size, number of channels and the data shape from the input batch."""
-    batch_size = data.shape[0]
+    output_batch_size = output.shape[0]
     if self.gcam_dict['channels'] == 'default':
-        channels = data.shape[1]
+        output_channels = output.shape[1]
     else:
-        channels = self.gcam_dict['channels']
+        output_channels = self.gcam_dict['channels']
     if self.gcam_dict['data_shape'] == 'default':
-        data_shape = data.shape[2:]
+        output_shape = output.shape[2:]
     else:
-        data_shape = self.model.gcam_dict['data_shape']
-    return batch_size, channels, data_shape
+        output_shape = self.model.gcam_dict['data_shape']
+    return output_batch_size, output_channels, output_shape
