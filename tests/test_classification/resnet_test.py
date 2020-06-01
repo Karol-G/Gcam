@@ -15,7 +15,8 @@ class TestClassification(unittest.TestCase):
     def __init__(self, *args, **kwargs):
         super(TestClassification, self).__init__(*args, **kwargs)
         self.DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.dataset = ImageFolder("data", loader=self.load_image)
+        self.current_path = os.path.dirname(os.path.abspath(__file__))
+        self.dataset = ImageFolder(os.path.join(self.current_path, 'data'), loader=self.load_image)
         self.model = models.resnet152(pretrained=True)
         self.model.to(device=self.DEVICE)
         self.model.eval()
@@ -33,7 +34,7 @@ class TestClassification(unittest.TestCase):
         return image
 
     def test_gbp(self):
-        model = gcam.inject(self.model, output_dir="results/resnet152/test_gbp", backend="gbp",
+        model = gcam.inject(self.model, output_dir=os.path.join(self.current_path, 'results/resnet152/test_gbp'), backend='gbp',
                     evaluate=False, save_scores=False, save_maps=False, save_pickle=False, channels=1)
         model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
@@ -44,62 +45,62 @@ class TestClassification(unittest.TestCase):
         gc.collect()
         torch.cuda.empty_cache()
 
-        if os.path.isdir("results/resnet152"):
-            shutil.rmtree("results/resnet152")
+        if os.path.isdir(os.path.join(self.current_path, 'results/resnet152')):
+            shutil.rmtree(os.path.join(self.current_path, 'results/resnet152'))
 
     def test_gcam(self):
         layer = 'layer4'
-        model = gcam.inject(self.model, output_dir="results/resnet152/test_gcam", backend="gcam", layer=layer,
+        model = gcam.inject(self.model, output_dir=os.path.join(self.current_path, 'results/resnet152/test_gcam'), backend='gcam', layer=layer,
                     evaluate=False, save_scores=False, save_maps=False, save_pickle=False, channels=1)
         model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
         model.test_run(next(iter(data_loader))[0])
 
         for i, batch in enumerate(data_loader):
-            _ = model(batch[0], label="best")
+            _ = model(batch[0])
 
         del model
         gc.collect()
         torch.cuda.empty_cache()
 
-        if os.path.isdir("results/resnet152"):
-            shutil.rmtree("results/resnet152")
+        if os.path.isdir(os.path.join(self.current_path, 'results/resnet152')):
+            shutil.rmtree(os.path.join(self.current_path, 'results/resnet152'))
 
     def test_ggcam(self):
         layer = 'layer4'
-        model = gcam.inject(self.model, output_dir="results/resnet152/test_ggcam", backend="ggcam", layer=layer,
+        model = gcam.inject(self.model, output_dir=os.path.join(self.current_path, 'results/resnet152/test_ggcam'), backend='ggcam', layer=layer,
                     evaluate=False, save_scores=False, save_maps=False, save_pickle=False, channels=1)
         model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
         model.test_run(next(iter(data_loader))[0])
 
         for i, batch in enumerate(data_loader):
-            _ = model(batch[0], label="best")
+            _ = model(batch[0])
 
         del model
         gc.collect()
         torch.cuda.empty_cache()
 
-        if os.path.isdir("results/resnet152"):
-            shutil.rmtree("results/resnet152")
+        if os.path.isdir(os.path.join(self.current_path, 'results/resnet152')):
+            shutil.rmtree(os.path.join(self.current_path, 'results/resnet152'))
 
     def test_gcampp(self):
         layer = 'layer4'
-        model = gcam.inject(self.model, output_dir="results/resnet152/test_gcampp", backend="gcampp", layer=layer,
+        model = gcam.inject(self.model, output_dir=os.path.join(self.current_path, 'results/resnet152/test_gcampp'), backend='gcampp', layer=layer,
                     evaluate=False, save_scores=False, save_maps=False, save_pickle=False, channels=1)
         model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
         model.test_run(next(iter(data_loader))[0])
 
         for i, batch in enumerate(data_loader):
-            _ = model(batch[0], label="best")
+            _ = model(batch[0])
 
         del model
         gc.collect()
         torch.cuda.empty_cache()
 
-        if os.path.isdir("results/resnet152"):
-            shutil.rmtree("results/resnet152")
+        if os.path.isdir(os.path.join(self.current_path, 'results/resnet152')):
+            shutil.rmtree(os.path.join(self.current_path, 'results/resnet152'))
 
 if __name__ == '__main__':
     unittest.main()
