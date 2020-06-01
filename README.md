@@ -1,12 +1,16 @@
 # Gcam (Grad-Cam)
 [![License](https://img.shields.io/badge/License-MIT-brightgreen.svg)](LICENSE)
 [![Docs](https://img.shields.io/badge/docs-available-blue.svg)](https://karol-g.github.io/Gcam)
-[![Pypi](https://img.shields.io/badge/pypi-v0.0.6-blue.svg)](https://pypi.org/project/gcam/)
+[![PyPI version](https://badge.fury.io/py/gcam.svg)](https://badge.fury.io/py/gcam)
 ![Python package](https://github.com/Karol-G/Gcam/workflows/Python%20package/badge.svg)
 
 Gcam is an easy to use Pytorch framework that makes model predictions more interpretable for humans. 
 It allows the generation of attention maps with multiple methods like Guided Backpropagation, 
-Grad-Cam, Guided Grad-Cam and Grad-Cam++.
+Grad-Cam, Guided Grad-Cam and Grad-Cam++. <br/> 
+All you need to add to your project is a **single line of code**: <br/> 
+```python
+model = gcam.inject(model, output_dir="attention_maps", save_maps=True)
+```
 
 ## Features
 
@@ -17,8 +21,8 @@ Grad-Cam, Guided Grad-Cam and Grad-Cam++.
 * Option for automatic layer selection
 
 ## Installation
-You can install Gcam via pip with: <br/>
-`pip install gcam`
+* Install Pytorch from https://pytorch.org/get-started/locally/
+* Install Gcam via pip with: `pip install gcam`
 
 ## Documentation
 Gcam is fully documented and you can view the documentation under: <br/> 
@@ -33,19 +37,6 @@ https://karol-g.github.io/Gcam
 |                 Grad-Cam                   |        ![](examples/images/class_2D_gcam.jpg)         |        ![](examples/images/seg_2D_gcam.jpg)           |        ![](examples/images/seg_3D_gcam.jpg)           |
 |              Guided Grad-Cam               |        ![](examples/images/class_2D_ggcam.jpg)        |        ![](examples/images/seg_2D_ggcam.jpg)          |        ![](examples/images/seg_3D_ggcam.jpg)          |
 |               Grad-Cam++                   |        ![](examples/images/class_2D_gcampp.jpg)       |        ![](examples/images/seg_2D_gcampp.jpg)         |        ![](examples/images/seg_3D_gcampp.jpg)         |
-
-
-## Install gcam from source
-
-* Install Pytorch from https://pytorch.org/get-started/locally/
-* Run `python setup.py sdist bdist_wheel` to create the gcam package in the `dist` directory
-* Navigate to `dist` with `cd dist`
-* Install gcam with `pip install gcam-XXX-py3-none-any.whl`
-
-## Install gcam requirements
-
-* Install Pytorch from https://pytorch.org/get-started/locally/
-* Run `pip install -r requirements.txt`
 
 ## Usage
 
@@ -69,6 +60,13 @@ for i, batch in enumerate(data_loader):
     # more of your code...
 ```
 
-## Demo
+## Demos
 
+### Classification
+TODO
+
+### 2D Segmentation
+TODO
+
+### 3D Segmentation
 You can find a Jupyter Notebook on how to use Gcam with the nnUNet for handeling 3D data inside the folder `demos`.
