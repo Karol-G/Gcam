@@ -15,16 +15,12 @@ class GuidedGradCam():
         self.model_GCAM = GradCAM(model=model, target_layers=target_layers, postprocessor=postprocessor, retain_graph=retain_graph)
         self.model_GBP = GuidedBackPropagation(model=model, postprocessor=postprocessor, retain_graph=retain_graph)
 
-    def forward(self, data):
-        """Calls the forward() of the backends gbp and gcam."""
-        self.output_GCAM = self.model_GCAM.forward(data.clone())
-        self.output_GBP = self.model_GBP.forward(data.clone())
-        return self.output_GCAM
-
-    def backward(self, label=None):
-        """Calls the backward() of the backends gbp and gcam."""
-        self.model_GCAM.backward(label=label)
-        self.model_GBP.backward(label=label)
+    def generate_attention_map(self, batch, label):
+        """Handles the generation of the attention map from start to finish."""
+        output, self.output_GCAM, output_batch_size, output_channels, output_shape = self.model_GCAM.generate_attention_map(batch.clone(), label)
+        _, self.output_GBP, _, _, _ = self.model_GBP.generate_attention_map(batch.clone(), label)
+        attention_map = self.generate()
+        return output, attention_map, output_batch_size, output_channels, output_shape
 
     def get_registered_hooks(self):
         """Returns every hook that was able to register to a layer."""

@@ -15,11 +15,18 @@ class _BaseWrapper():
         self.backward_handlers = []
         self.postprocessor = postprocessor
 
-    def forward(self, data):
+    def generate_attention_map(self, batch, label):
+        """Handles the generation of the attention map from start to finish."""
+        output = self.forward(batch)
+        self.backward(label=label)
+        attention_map = self.generate()
+        return output, attention_map, self.output_batch_size, self.output_channels, self.output_shape
+
+    def forward(self, batch):
         """Calls the forward() of the model."""
         self.model.zero_grad()
-        self.logits = self.model.model_forward(data)
-        self._extract_metadata(data, self.logits)
+        self.logits = self.model.model_forward(batch)
+        self._extract_metadata(batch, self.logits)
         self._set_postprocessor_and_label(self.logits)
         self.remove_hook(forward=True, backward=False)
         return self.logits

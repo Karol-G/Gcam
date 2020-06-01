@@ -217,10 +217,7 @@ def forward(self, batch, label=None, mask=None):
         if self.gcam_dict['layer'] == 'full' and not self.gcam_dict['tested']:
             raise ValueError("Layer mode 'full' requires a test run either during injection or by calling test_run() afterwards")
         with torch.enable_grad():
-            output = self.gcam_dict['model_backend'].forward(batch)
-            batch_size, channels, data_shape = self._extract_metadata(batch, output)
-            self.gcam_dict['model_backend'].backward(label=label)
-            attention_map = self.gcam_dict['model_backend'].generate()
+            output, attention_map, batch_size, channels, data_shape = self.gcam_dict['model_backend'].generate_attention_map(batch, label)
             if attention_map:
                 if len(attention_map.keys()) == 1:
                     self.gcam_dict['current_attention_map'] = attention_map[list(attention_map.keys())[0]]
@@ -246,8 +243,7 @@ def test_run(self, batch):
     registered_hooks = []
     if batch is not None and not self.gcam_dict['tested']:
         with torch.enable_grad():
-            output = self.gcam_dict['model_backend'].forward(batch)
-            self.gcam_dict['model_backend'].backward()
+            _ = self.gcam_dict['model_backend'].generate_attention_map(batch, None)
             registered_hooks = self.gcam_dict['model_backend'].get_registered_hooks()
         self.gcam_dict['tested'] = True
         print("Successfully registered to the following layers: ", registered_hooks)
