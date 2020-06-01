@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="gcam",
-    version="0.0.10",
+    version="0.0.12",
     author="Karol Gotkowski",
     author_email="KarolGotkowski@gmx.de",
     description="An easy to use framework that makes model predictions more interpretable for humans.",
