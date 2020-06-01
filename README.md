@@ -2,6 +2,7 @@
 [![License](https://img.shields.io/badge/License-MIT-brightgreen.svg)](LICENSE)
 [![Docs](https://img.shields.io/badge/docs-available-blue.svg)](https://karol-g.github.io/Gcam)
 [![Pypi](https://img.shields.io/badge/pypi-v0.0.6-blue.svg)](https://pypi.org/project/gcam/)
+![Python package](https://github.com/Karol-G/Gcam/workflows/Python%20package/badge.svg)
 
 Gcam is an easy to use Pytorch framework that makes model predictions more interpretable for humans. 
 It allows the generation of attention maps with multiple methods like Guided Backpropagation, 
