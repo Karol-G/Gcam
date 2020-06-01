@@ -6,7 +6,9 @@
 
 Gcam is an easy to use Pytorch framework that makes model predictions more interpretable for humans. 
 It allows the generation of attention maps with multiple methods like Guided Backpropagation, 
-Grad-Cam, Guided Grad-Cam and Grad-Cam++.
+Grad-Cam, Guided Grad-Cam and Grad-Cam++. <br/> 
+All you need to add to your project is a **single line of code**: <br/> 
+`model = gcam.inject(model, output_dir="attention_maps", save_maps=True)`
 
 ## Features
 
