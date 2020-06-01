@@ -9,6 +9,8 @@ import shutil
 import os
 import unittest
 
+CLEAR = True
+
 
 class TestClassification(unittest.TestCase):
 
@@ -35,7 +37,7 @@ class TestClassification(unittest.TestCase):
 
     def test_gbp(self):
         model = gcam.inject(self.model, output_dir=os.path.join(self.current_path, 'results/resnet152/test_gbp'), backend='gbp',
-                    evaluate=False, save_scores=False, save_maps=False, save_pickle=False, channels=1)
+                    evaluate=False, save_scores=False, save_maps=True, save_pickle=False, channels=1)
         model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
         for i, batch in enumerate(data_loader):
@@ -45,13 +47,13 @@ class TestClassification(unittest.TestCase):
         gc.collect()
         torch.cuda.empty_cache()
 
-        if os.path.isdir(os.path.join(self.current_path, 'results/resnet152')):
+        if CLEAR and os.path.isdir(os.path.join(self.current_path, 'results/resnet152')):
             shutil.rmtree(os.path.join(self.current_path, 'results/resnet152'))
 
     def test_gcam(self):
         layer = 'layer4'
         model = gcam.inject(self.model, output_dir=os.path.join(self.current_path, 'results/resnet152/test_gcam'), backend='gcam', layer=layer,
-                    evaluate=False, save_scores=False, save_maps=False, save_pickle=False, channels=1)
+                    evaluate=False, save_scores=False, save_maps=True, save_pickle=False, channels=1)
         model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
         model.test_run(next(iter(data_loader))[0])
@@ -63,13 +65,13 @@ class TestClassification(unittest.TestCase):
         gc.collect()
         torch.cuda.empty_cache()
 
-        if os.path.isdir(os.path.join(self.current_path, 'results/resnet152')):
+        if CLEAR and os.path.isdir(os.path.join(self.current_path, 'results/resnet152')):
             shutil.rmtree(os.path.join(self.current_path, 'results/resnet152'))
 
     def test_ggcam(self):
         layer = 'layer4'
         model = gcam.inject(self.model, output_dir=os.path.join(self.current_path, 'results/resnet152/test_ggcam'), backend='ggcam', layer=layer,
-                    evaluate=False, save_scores=False, save_maps=False, save_pickle=False, channels=1)
+                    evaluate=False, save_scores=False, save_maps=True, save_pickle=False, channels=1)
         model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
         model.test_run(next(iter(data_loader))[0])
@@ -81,13 +83,13 @@ class TestClassification(unittest.TestCase):
         gc.collect()
         torch.cuda.empty_cache()
 
-        if os.path.isdir(os.path.join(self.current_path, 'results/resnet152')):
+        if CLEAR and os.path.isdir(os.path.join(self.current_path, 'results/resnet152')):
             shutil.rmtree(os.path.join(self.current_path, 'results/resnet152'))
 
     def test_gcampp(self):
         layer = 'layer4'
         model = gcam.inject(self.model, output_dir=os.path.join(self.current_path, 'results/resnet152/test_gcampp'), backend='gcampp', layer=layer,
-                    evaluate=False, save_scores=False, save_maps=False, save_pickle=False, channels=1)
+                    evaluate=False, save_scores=False, save_maps=True, save_pickle=False, channels=1)
         model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
         model.test_run(next(iter(data_loader))[0])
@@ -99,7 +101,7 @@ class TestClassification(unittest.TestCase):
         gc.collect()
         torch.cuda.empty_cache()
 
-        if os.path.isdir(os.path.join(self.current_path, 'results/resnet152')):
+        if CLEAR and os.path.isdir(os.path.join(self.current_path, 'results/resnet152')):
             shutil.rmtree(os.path.join(self.current_path, 'results/resnet152'))
 
 if __name__ == '__main__':

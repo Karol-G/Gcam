@@ -8,6 +8,8 @@ from torch.utils.data import DataLoader
 import gc
 import shutil
 
+CLEAR = True
+
 
 class TestSegmentation(unittest.TestCase):
 
@@ -24,7 +26,7 @@ class TestSegmentation(unittest.TestCase):
 
     def test_gbp(self):
         model = gcam.inject(self.model, output_dir=os.path.join(self.current_path, 'results/unet_seg/gbp'), backend='gbp',
-                            evaluate=True, save_scores=False, save_maps=False, save_pickle=False, metric="wioa", label=lambda x: 0.5 < x, channels=1)
+                            evaluate=True, save_scores=False, save_maps=True, save_pickle=False, metric="wioa", label=lambda x: 0.5 < x, channels=1)
         model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
 
@@ -35,14 +37,14 @@ class TestSegmentation(unittest.TestCase):
         gc.collect()
         torch.cuda.empty_cache()
 
-        if os.path.isdir(os.path.join(self.current_path, 'results/unet_seg')):
+        if CLEAR and os.path.isdir(os.path.join(self.current_path, 'results/unet_seg')):
             shutil.rmtree(os.path.join(self.current_path, 'results/unet_seg'))
 
     def test_gcam(self):
         layer = 'full'
         metric = 'wioa'
         model = gcam.inject(self.model, output_dir=os.path.join(self.current_path, 'results/unet_seg/gcam'), backend='gcam', layer=layer,
-                            evaluate=True, save_scores=False, save_maps=False, save_pickle=False, metric=metric, label=lambda x: 0.5 < x, channels=1)
+                            evaluate=True, save_scores=False, save_maps=True, save_pickle=False, metric=metric, label=lambda x: 0.5 < x, channels=1)
         model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
         model.test_run(next(iter(data_loader))["img"])
@@ -54,14 +56,14 @@ class TestSegmentation(unittest.TestCase):
         gc.collect()
         torch.cuda.empty_cache()
 
-        if os.path.isdir(os.path.join(self.current_path, 'results/unet_seg')):
+        if CLEAR and os.path.isdir(os.path.join(self.current_path, 'results/unet_seg')):
             shutil.rmtree(os.path.join(self.current_path, 'results/unet_seg'))
 
     def test_ggcam(self):
         layer = 'full'
         metric = 'wioa'
         model = gcam.inject(self.model, output_dir=os.path.join(self.current_path, 'results/unet_seg/ggcam'), backend='ggcam', layer=layer,
-                            evaluate=True, save_scores=False, save_maps=False, save_pickle=False, metric=metric, label=lambda x: 0.5 < x, channels=1)
+                            evaluate=True, save_scores=False, save_maps=True, save_pickle=False, metric=metric, label=lambda x: 0.5 < x, channels=1)
         model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
         model.test_run(next(iter(data_loader))["img"])
@@ -73,14 +75,14 @@ class TestSegmentation(unittest.TestCase):
         gc.collect()
         torch.cuda.empty_cache()
 
-        if os.path.isdir(os.path.join(self.current_path, 'results/unet_seg')):
+        if CLEAR and os.path.isdir(os.path.join(self.current_path, 'results/unet_seg')):
             shutil.rmtree(os.path.join(self.current_path, 'results/unet_seg'))
 
     def test_gcampp(self):
         layer = 'full'
         metric = 'wioa'
         model = gcam.inject(self.model, output_dir=os.path.join(self.current_path, 'results/unet_seg/gcampp'), backend='gcampp', layer=layer,
-                            evaluate=True, save_scores=False, save_maps=False, save_pickle=False, metric=metric, label=lambda x: 0.5 < x, channels=1)
+                            evaluate=True, save_scores=False, save_maps=True, save_pickle=False, metric=metric, label=lambda x: 0.5 < x, channels=1)
         model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
         model.test_run(next(iter(data_loader))["img"])
@@ -92,7 +94,7 @@ class TestSegmentation(unittest.TestCase):
         gc.collect()
         torch.cuda.empty_cache()
 
-        if os.path.isdir(os.path.join(self.current_path, 'results/unet_seg')):
+        if CLEAR and os.path.isdir(os.path.join(self.current_path, 'results/unet_seg')):
             shutil.rmtree(os.path.join(self.current_path, 'results/unet_seg'))
 
 
