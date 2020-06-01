@@ -4,8 +4,8 @@
 name: Upload Python Package
 
 on:
-  release:
-    types: [created]
+  push:
+    branches: [ master ]
 
 jobs:
   deploy:
@@ -17,7 +17,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v2
       with:
-        python-version: '3.x'
+        python-version: 3.6
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
@@ -27,5 +27,6 @@ jobs:
         TWINE_USERNAME: ${{ secrets.GCAM_NAME }}
         TWINE_PASSWORD: ${{ secrets.GCAM_TOKEN }}
       run: |
+        if: startsWith(github.event.ref, 'refs/tags')
         python setup.py sdist bdist_wheel
         twine upload dist/*
