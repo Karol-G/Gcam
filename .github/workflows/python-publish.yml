@@ -28,4 +28,4 @@ jobs:
         TWINE_PASSWORD: ${{ secrets.GCAM_TOKEN }}
       run: |
         python setup.py sdist bdist_wheel
-        twine upload dist/*
+        twine upload -u $TWINE_USERNAME -p $TWINE_PASSWORD dist/*
