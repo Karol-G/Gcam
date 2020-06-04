@@ -63,10 +63,10 @@ for i, batch in enumerate(data_loader):
 ## Demos
 
 ### Classification
-You can find a Jupyter Notebook on how to use Gcam for classification using a resnet152 at `demos/Gcam_classification_demo.ipynb`.
+You can find a Jupyter Notebook on how to use Gcam for classification using a resnet152 at `demos/Gcam_classification_demo.ipynb` or opening it directly in Google Colab: [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1D_mNzum6drCo5S-bbF8oVoFoCZevE90E?usp=sharing)
 
 ### 2D Segmentation
 TODO
 
 ### 3D Segmentation
-You can find a Jupyter Notebook on how to use Gcam with the nnUNet for handeling 3D data at `demos/Gcam_nnUNet_demo.ipynb`.
+You can find a Jupyter Notebook on how to use Gcam with the nnUNet for handeling 3D data at `demos/Gcam_nnUNet_demo.ipynb` or opening it directly in Google Colab: [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1mK75vALz07fukwnkGG5gg4r6RSR0DyzW?usp=sharing)
