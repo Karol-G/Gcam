@@ -14,7 +14,7 @@ class GradCamPP(GradCAM):
         """
         super(GradCamPP, self).__init__(model, target_layers=target_layers, postprocessor=postprocessor, retain_graph=retain_graph)
 
-    def _generate_helper(self, fmaps, grads):
+    def _generate_helper(self, fmaps, grads, layer):
         B, C, *data_shape = grads.size()
 
         alpha_num = grads.pow(2)

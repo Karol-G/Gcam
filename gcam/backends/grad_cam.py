@@ -91,7 +91,7 @@ class GradCAM(_BaseWrapper):
         if self._target_layers == "auto":
             layer, fmaps, grads = self._auto_layer_selection()
             self._check_hooks(layer)
-            attention_map = self._generate_helper(fmaps, grads).cpu().numpy()
+            attention_map = self._generate_helper(fmaps, grads, layer).cpu().numpy()
             attention_maps = {layer: attention_map}
         else:
             for layer in self.target_layers:
@@ -99,7 +99,7 @@ class GradCAM(_BaseWrapper):
                 if self.registered_hooks[layer][0] and self.registered_hooks[layer][1]:
                     fmaps = self._find(self.fmap_pool, layer)
                     grads = self._find(self.grad_pool, layer)
-                    attention_map = self._generate_helper(fmaps, grads)
+                    attention_map = self._generate_helper(fmaps, grads, layer)
                     attention_maps[layer] = attention_map.cpu().numpy()
         if not attention_maps:
             raise ValueError("None of the hooks registered to the target layers")
@@ -153,7 +153,7 @@ class GradCAM(_BaseWrapper):
         else:
             return F.adaptive_avg_pool3d(grads, 1)
 
-    def _generate_helper(self, fmaps, grads):
+    def _generate_helper(self, fmaps, grads, layer):
         weights = self._compute_grad_weights(grads)
         attention_map = torch.mul(fmaps, weights)
         B, _, *data_shape = attention_map.shape
