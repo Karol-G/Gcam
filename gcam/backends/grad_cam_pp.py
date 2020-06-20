@@ -45,7 +45,10 @@ class GradCamPP(GradCAM):
             weights = weights.view(B, C, 1, 1, 1)
 
         attention_map = (weights * fmaps)
-        attention_map = attention_map.view(B, self.output_channels, -1, *data_shape)
+        try:
+            attention_map = attention_map.view(B, self.output_channels, -1, *data_shape)
+        except RuntimeError:
+            raise RuntimeError("Number of set channels ({}) is not a multiple of the feature map channels ({}) in layer: {}".format(self.output_channels, fmaps.shape[1], layer))
         attention_map = torch.sum(attention_map, dim=2)
         attention_map = F.relu(attention_map).detach()
         attention_map = self._normalize_per_channel(attention_map)

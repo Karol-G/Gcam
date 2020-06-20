@@ -214,6 +214,7 @@ def forward(self, batch, label=None, mask=None):
 
     """
     if self.gcam_dict['enabled']:
+        self.test_run(batch, internal=True)
         if self.gcam_dict['layer'] == 'full' and not self.gcam_dict['tested']:
             raise ValueError("Layer mode 'full' requires a test run either during injection or by calling test_run() afterwards")
         with torch.enable_grad():
@@ -238,7 +239,7 @@ def forward(self, batch, label=None, mask=None):
     else:
         return self.model_forward(batch)
 
-def test_run(self, batch):
+def test_run(self, batch, internal=False):
     """Performs a test run. This allows gcam to determine for which layers it can generate attention maps."""
     registered_hooks = []
     if batch is not None and not self.gcam_dict['tested']:
@@ -246,9 +247,10 @@ def test_run(self, batch):
             _ = self.gcam_dict['model_backend'].generate_attention_map(batch, None)
             registered_hooks = self.gcam_dict['model_backend'].get_registered_hooks()
         self.gcam_dict['tested'] = True
-        print("Successfully registered to the following layers: ", registered_hooks)
-        if self.gcam_dict['output_dir'] is not None:
-            np.savetxt(self.gcam_dict['output_dir'] + '/registered_layers.txt', np.asarray(registered_hooks).astype(str), fmt="%s")
+        if not internal:
+            print("Successfully registered to the following layers: ", registered_hooks)
+            if self.gcam_dict['output_dir'] is not None:
+                np.savetxt(self.gcam_dict['output_dir'] + '/registered_layers.txt', np.asarray(registered_hooks).astype(str), fmt="%s")
     return registered_hooks
 
 def disable_gcam(self):

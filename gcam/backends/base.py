@@ -14,6 +14,7 @@ class _BaseWrapper():
         self.forward_handlers = []
         self.backward_handlers = []
         self.postprocessor = postprocessor
+        self.registered_hooks = {}
 
     def generate_attention_map(self, batch, label):
         """Handles the generation of the attention map from start to finish."""

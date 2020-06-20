@@ -25,7 +25,6 @@ class GradCAM(_BaseWrapper):
         elif isinstance(target_layers, str):
             target_layers = [target_layers]
         self.target_layers = target_layers
-        self.registered_hooks = {}
 
     def _register_hooks(self):
         """Registers the forward and backward hooks to the layers."""
@@ -88,26 +87,23 @@ class GradCAM(_BaseWrapper):
     def generate(self):
         """Generates an attention map."""
         self.remove_hook(forward=True, backward=True)
-        try:
-            attention_maps = {}
-            if self._target_layers == "auto":
-                layer, fmaps, grads = self._auto_layer_selection()
+        attention_maps = {}
+        if self._target_layers == "auto":
+            layer, fmaps, grads = self._auto_layer_selection()
+            self._check_hooks(layer)
+            attention_map = self._generate_helper(fmaps, grads).cpu().numpy()
+            attention_maps = {layer: attention_map}
+        else:
+            for layer in self.target_layers:
                 self._check_hooks(layer)
-                attention_map = self._generate_helper(fmaps, grads).cpu().numpy()
-                attention_maps = {layer: attention_map}
-            else:
-                for layer in self.target_layers:
-                    self._check_hooks(layer)
-                    if self.registered_hooks[layer][0] and self.registered_hooks[layer][1]:
-                        fmaps = self._find(self.fmap_pool, layer)
-                        grads = self._find(self.grad_pool, layer)
-                        attention_map = self._generate_helper(fmaps, grads)
-                        attention_maps[layer] = attention_map.cpu().numpy()
-            if not attention_maps:
-                raise ValueError("None of the hooks registered to the target layers")
-            return attention_maps
-        except RuntimeError:
-            raise RuntimeError("Number of set channels ({}) is not a multiple of the feature map channels ({}) in layer: {}".format(self.output_channels, fmaps.shape[1], layer))
+                if self.registered_hooks[layer][0] and self.registered_hooks[layer][1]:
+                    fmaps = self._find(self.fmap_pool, layer)
+                    grads = self._find(self.grad_pool, layer)
+                    attention_map = self._generate_helper(fmaps, grads)
+                    attention_maps[layer] = attention_map.cpu().numpy()
+        if not attention_maps:
+            raise ValueError("None of the hooks registered to the target layers")
+        return attention_maps
 
     def _auto_layer_selection(self):
         """Selects the last layer from which attention maps can be generated."""
@@ -161,7 +157,10 @@ class GradCAM(_BaseWrapper):
         weights = self._compute_grad_weights(grads)
         attention_map = torch.mul(fmaps, weights)
         B, _, *data_shape = attention_map.shape
-        attention_map = attention_map.view(B, self.output_channels, -1, *data_shape)
+        try:
+            attention_map = attention_map.view(B, self.output_channels, -1, *data_shape)
+        except RuntimeError:
+            raise RuntimeError("Number of set channels ({}) is not a multiple of the feature map channels ({}) in layer: {}".format(self.output_channels, fmaps.shape[1], layer))
         attention_map = torch.sum(attention_map, dim=2)
         attention_map = F.relu(attention_map)
         attention_map = self._normalize_per_channel(attention_map)

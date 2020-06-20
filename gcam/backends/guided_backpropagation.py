@@ -21,8 +21,18 @@ class GuidedBackPropagation(_BaseWrapper):
                 return (torch.clamp(grad_in[0], min=0.0),)
 
         self.remove_hook(forward=True, backward=True)
-        for module in self.model.named_modules():
-            self.backward_handlers.append(module[1].register_backward_hook(backward_hook))
+        for name, module in self.model.named_modules():
+            self.registered_hooks[name] = [True, True]
+            self.backward_handlers.append(module.register_backward_hook(backward_hook))
+
+    def get_registered_hooks(self):
+        """Returns every hook that was able to register to a layer."""
+        registered_hooks = []
+        for layer in self.registered_hooks.keys():
+            if self.registered_hooks[layer][0] and self.registered_hooks[layer][1]:
+                registered_hooks.append(layer)
+        self.remove_hook(forward=True, backward=True)
+        return registered_hooks
 
     def forward(self, data):
         """Calls the forward() of the base."""
@@ -32,7 +42,6 @@ class GuidedBackPropagation(_BaseWrapper):
 
     def generate(self):
         """Generates an attention map."""
-        # try:
         attention_map = self.data.grad.clone()
         self.data.grad.zero_()
         B, _, *data_shape = attention_map.shape
@@ -45,5 +54,3 @@ class GuidedBackPropagation(_BaseWrapper):
         attention_maps = {}
         attention_maps[""] = attention_map
         return attention_maps
-        # except RuntimeError:
-        #     raise RuntimeError("Number of set channels ({}) is not a multiple of the feature map channels ({})".format(self.channels, attention_map.shape[1]))
