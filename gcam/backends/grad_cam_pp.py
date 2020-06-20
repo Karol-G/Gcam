@@ -29,12 +29,13 @@ class GradCamPP(GradCAM):
         alpha_denom = torch.where(alpha_denom != 0.0, alpha_denom, torch.ones_like(alpha_denom))
         alpha = alpha_num.div(alpha_denom + 1e-7)
 
-        mask = self.mask.squeeze()
-        if self.mask is None:
-            prob_weights = 1
-        elif len(mask.shape) == 1:
+        if self.mask is not None:
+            mask = self.mask.squeeze()
+        if self.mask is None:  # Classification
+            prob_weights = torch.tensor(1.0)
+        elif len(mask.shape) == 1:  # Classification best/index
             prob_weights = self.logits.squeeze()[torch.argmax(mask)]
-        else:
+        else:  # Segmentation
             prob_weights = gcam_utils.interpolate(self.logits, grads.shape[2:])  # TODO: Still removes channels...
 
         positive_gradients = F.relu(torch.mul(prob_weights.exp(), grads))
