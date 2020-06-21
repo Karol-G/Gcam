@@ -59,6 +59,25 @@ class TestSegmentation(unittest.TestCase):
         if CLEAR and os.path.isdir(os.path.join(self.current_path, 'results/unet_seg')):
             shutil.rmtree(os.path.join(self.current_path, 'results/unet_seg'))
 
+    def test_gcam_overlay(self):
+        layer = 'full'
+        metric = 'wioa'
+        model = gcam.inject(self.model, output_dir=os.path.join(self.current_path, 'results/unet_seg/gcam_overlay'), backend='gcam', layer=layer,
+                            evaluate=True, save_scores=False, save_maps=True, save_pickle=False, metric=metric, label=lambda x: 0.5 < x, channels=1)
+        model.eval()
+        data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
+        model.test_run(next(iter(data_loader))["img"])
+
+        for i, batch in enumerate(data_loader):
+            _ = model(batch["img"], mask=batch["gt"], raw_input=batch["img"])
+
+        del model
+        gc.collect()
+        torch.cuda.empty_cache()
+
+        if CLEAR and os.path.isdir(os.path.join(self.current_path, 'results/unet_seg')):
+            shutil.rmtree(os.path.join(self.current_path, 'results/unet_seg'))
+
     def test_ggcam(self):
         layer = 'full'
         metric = 'wioa'

@@ -33,7 +33,7 @@ class TestClassification(unittest.TestCase):
             ]
         )(raw_image[..., ::-1].copy())
         image = image.to(self.DEVICE)
-        return image
+        return image, raw_image
 
     def test_gbp(self):
         model = gcam.inject(self.model, output_dir=os.path.join(self.current_path, 'results/resnet152/test_gbp'), backend='gbp',
@@ -41,7 +41,7 @@ class TestClassification(unittest.TestCase):
         model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
         for i, batch in enumerate(data_loader):
-            _ = model(batch[0])
+            _ = model(batch[0][0])
 
         del model
         gc.collect()
@@ -56,10 +56,26 @@ class TestClassification(unittest.TestCase):
                     evaluate=False, save_scores=False, save_maps=True, save_pickle=False, channels=1)
         model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
-        model.test_run(next(iter(data_loader))[0])
 
         for i, batch in enumerate(data_loader):
-            _ = model(batch[0])
+            _ = model(batch[0][0])
+
+        del model
+        gc.collect()
+        torch.cuda.empty_cache()
+
+        if CLEAR and os.path.isdir(os.path.join(self.current_path, 'results/resnet152')):
+            shutil.rmtree(os.path.join(self.current_path, 'results/resnet152'))
+
+    def test_gcam_overlay(self):
+        layer = 'layer4'
+        model = gcam.inject(self.model, output_dir=os.path.join(self.current_path, 'results/resnet152/test_gcam_overlay'), backend='gcam', layer=layer,
+                    evaluate=False, save_scores=False, save_maps=True, save_pickle=False, channels=1)
+        model.eval()
+        data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
+
+        for i, batch in enumerate(data_loader):
+            _ = model(batch[0][0], raw_input=batch[0][1])
 
         del model
         gc.collect()
@@ -74,10 +90,9 @@ class TestClassification(unittest.TestCase):
                     evaluate=False, save_scores=False, save_maps=True, save_pickle=False, channels=1)
         model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
-        model.test_run(next(iter(data_loader))[0])
 
         for i, batch in enumerate(data_loader):
-            _ = model(batch[0])
+            _ = model(batch[0][0])
 
         del model
         gc.collect()
@@ -92,10 +107,9 @@ class TestClassification(unittest.TestCase):
                     evaluate=False, save_scores=False, save_maps=True, save_pickle=False, channels=1)
         model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
-        model.test_run(next(iter(data_loader))[0])
 
         for i, batch in enumerate(data_loader):
-            _ = model(batch[0])
+            _ = model(batch[0][0])
 
         del model
         gc.collect()
