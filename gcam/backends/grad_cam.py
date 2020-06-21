@@ -148,7 +148,7 @@ class GradCAM(_BaseWrapper):
 
     def _compute_grad_weights(self, grads):
         """Computes the weights based on the gradients by average pooling."""
-        if len(self.output_shape) == 2:
+        if self.input_dim == 2:
             return F.adaptive_avg_pool2d(grads, 1)
         else:
             return F.adaptive_avg_pool3d(grads, 1)

@@ -102,7 +102,10 @@ class _BaseWrapper():
         else:
             self.output_channels = self.model.gcam_dict['channels']
         if self.model.gcam_dict['data_shape'] == 'default':
-            self.output_shape = output.shape[2:]
+            if len(output.shape) == 2:  # Classification -> Cannot convert attention map to classifiaction
+                self.output_shape = None
+            else:  # Output is an 2D/3D image
+                self.output_shape = output.shape[2:]
         else:
             self.output_shape = self.model.gcam_dict['data_shape']
 
@@ -148,6 +151,6 @@ class _BaseWrapper():
                 self.postprocessor = "sigmoid"
             elif output.shape[0] == self.output_batch_size and len(output.shape) == 4 and output.shape[1] > 1:  # 3D segmentation (nnUNet)
                 self.postprocessor = torch.nn.Softmax(dim=2)
-        # if self.model.gcam_dict['label'] is None:  # TODO: Best for classification can lead to empty attention maps in some cases, reason is that computed weights are negative and relu filters them out. No idea if it should be like that or if its a bug
-        #     if output.shape[0] == self.output_batch_size and len(output.shape) == 2:  # classification
-        #         self.model.gcam_dict['label'] = "best"
+        if self.model.gcam_dict['label'] is None:
+            if output.shape[0] == self.output_batch_size and len(output.shape) == 2:  # classification
+                self.model.gcam_dict['label'] = "best"

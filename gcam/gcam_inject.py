@@ -166,7 +166,6 @@ def inject(model, output_dir=None, backend='gcam', layer='auto', channels=1, dat
     model_clone._process_attention_maps = types.MethodType(_process_attention_maps, model_clone)
     model_clone._save_attention_map = types.MethodType(_save_attention_map, model_clone)
     model_clone._replace_output = types.MethodType(_replace_output, model_clone)
-    model_clone._extract_metadata = types.MethodType(_extract_metadata, model_clone)
 
     model_backend, heatmap = _assign_backend(backend, model_clone, layer, postprocessor, retain_graph)
     gcam_dict['model_backend'] = model_backend
@@ -316,20 +315,8 @@ def _replace_output(self, output, attention_map, data_shape):
     if self.gcam_dict['_replace_output']:
         if len(attention_map.keys()) == 1:
             output = torch.tensor(self.gcam_dict['current_attention_map']).to(str(self.gcam_dict['device']))
-            output = gcam_utils.interpolate(output, data_shape)
+            if data_shape is not None:  # If data_shape is None then the task is classification -> return unchanged attention map
+                output = gcam_utils.interpolate(output, data_shape)
         else:
             raise ValueError("Not possible to replace output when layer is 'full', only with 'auto' or a manually set layer")
     return output
-
-def _extract_metadata(self, input, output):  # TODO: Does not work for classification output (shape: (1, 1000))
-    """Extracts metadata like batch size, number of channels and the data shape from the input batch."""
-    output_batch_size = output.shape[0]
-    if self.gcam_dict['channels'] == 'default':
-        output_channels = output.shape[1]
-    else:
-        output_channels = self.gcam_dict['channels']
-    if self.gcam_dict['data_shape'] == 'default':
-        output_shape = output.shape[2:]
-    else:
-        output_shape = self.model.gcam_dict['data_shape']
-    return output_batch_size, output_channels, output_shape
