@@ -9,7 +9,7 @@ import operator
 
 MIN_SHAPE = (500, 500)
 
-def save_attention_map(filename, attention_map, heatmap):
+def save_attention_map(filename, attention_map, heatmap, raw_input):
     """
     Saves an attention maps.
     Args:
@@ -19,13 +19,13 @@ def save_attention_map(filename, attention_map, heatmap):
     """
     dim = len(attention_map.shape)
     attention_map = normalize(attention_map.astype(np.float))
-    attention_map = generate_attention_map(attention_map, heatmap, dim)
+    attention_map = generate_attention_map(attention_map, heatmap, dim, raw_input)
     _save_file(filename, attention_map, dim)
 
-def generate_attention_map(attention_map, heatmap, dim):
+def generate_attention_map(attention_map, heatmap, dim, raw_input):
     if dim == 2:
         if heatmap:
-            return generate_gcam2d(attention_map)
+            return generate_gcam2d(attention_map, raw_input)
         else:
             return generate_guided_bp2d(attention_map)
     elif dim == 3:
@@ -36,12 +36,15 @@ def generate_attention_map(attention_map, heatmap, dim):
     else:
         raise RuntimeError("Unsupported dimension. Only 2D and 3D data is supported.")
 
-def generate_gcam2d(attention_map):
+def generate_gcam2d(attention_map, raw_input):
     assert(len(attention_map.shape) == 2)  # No batch dim
     assert(isinstance(attention_map, np.ndarray))  # Not a tensor
 
-    attention_map = _resize_attention_map(attention_map, MIN_SHAPE)
-    attention_map = cm.jet_r(attention_map)[..., :3] * 255.0
+    if raw_input is not None:
+        attention_map = overlay(raw_input, attention_map)
+    else:
+        attention_map = _resize_attention_map(attention_map, MIN_SHAPE)
+        attention_map = cm.jet_r(attention_map)[..., :3] * 255.0
     return np.uint8(attention_map)
 
 def generate_guided_bp2d(attention_map):
@@ -164,3 +167,17 @@ def _interpolate_tensor(data, shape, squeeze):
 
 def prod(iterable):
     return reduce(operator.mul, iterable, 1)
+
+def overlay(raw_input, attention_map):
+    if isinstance(raw_input, torch.Tensor):
+        raw_input = raw_input.detach().cpu().numpy()
+        if raw_input.shape[0] == 1 or raw_input.shape[0] == 3:
+            raw_input = raw_input.transpose(1, 2, 0)
+    if np.max(raw_input) > 1:
+        raw_input = raw_input.astype(np.float)
+        raw_input /= 255
+    attention_map = cv2.resize(attention_map, tuple(np.flip(raw_input.shape[:2])))
+    attention_map = cm.jet_r(attention_map)[..., :3]
+    attention_map = (attention_map.astype(np.float) + raw_input.astype(np.float)) / 2
+    attention_map *= 255
+    return attention_map

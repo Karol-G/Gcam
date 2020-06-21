@@ -201,7 +201,7 @@ def dump(self):
     if self.gcam_dict['save_scores']:
         self.gcam_dict['Evaluator'].dump()
 
-def forward(self, batch, label=None, mask=None):
+def forward(self, batch, label=None, mask=None, raw_input=None):
     """
     Generates attention maps for a given batch input.
     Args:
@@ -222,7 +222,7 @@ def forward(self, batch, label=None, mask=None):
                 if len(attention_map.keys()) == 1:
                     self.gcam_dict['current_attention_map'] = attention_map[list(attention_map.keys())[0]]
                     self.gcam_dict['current_layer'] = list(attention_map.keys())[0]
-                scores = self._process_attention_maps(attention_map, mask, batch_size, channels)
+                scores = self._process_attention_maps(attention_map, mask, batch_size, channels, raw_input)
                 output = self._replace_output(output, attention_map, data_shape)
             else:  # If no attention maps could be extracted
                 self.gcam_dict['current_attention_map'] = None
@@ -281,9 +281,10 @@ def _assign_backend(backend, model, target_layers, postprocessor, retain_graph):
     else:
         raise ValueError("Backend does not exist")
 
-def _process_attention_maps(self, attention_map, mask, batch_size, channels):
+def _process_attention_maps(self, attention_map, mask, batch_size, channels, raw_input):
     """Handles all the stuff after the attention map has been generated. Like creating dictionaries, saving the attention map and doing the evaluation."""
     batch_scores = defaultdict(list) if self.gcam_dict['evaluate'] else None
+    raw_input_single = None
     for layer_name in attention_map.keys():
         layer_output_dir = None
         if self.gcam_dict['output_dir'] is not None and self.gcam_dict['save_maps']:
@@ -295,7 +296,9 @@ def _process_attention_maps(self, attention_map, mask, batch_size, channels):
         for j in range(batch_size):
             for k in range(channels):
                 attention_map_single = attention_map[layer_name][j][k]
-                self._save_attention_map(attention_map_single, layer_output_dir, j, k)
+                if raw_input is not None:
+                    raw_input_single = raw_input[j]
+                self._save_attention_map(attention_map_single, layer_output_dir, j, k, raw_input_single)
                 if self.gcam_dict['evaluate']:
                     if mask is None:
                         raise ValueError("Mask cannot be none in evaluation mode")
@@ -303,12 +306,12 @@ def _process_attention_maps(self, attention_map, mask, batch_size, channels):
                     batch_scores[layer_name].append(score)
     return batch_scores
 
-def _save_attention_map(self, attention_map, layer_output_dir, j, k):
+def _save_attention_map(self, attention_map, layer_output_dir, j, k, raw_input):
     """Internal method for saving saving an attention map."""
     if self.gcam_dict['save_pickle']:
         self.gcam_dict['pickle_maps'].append(attention_map)
     if self.gcam_dict['save_maps']:
-        gcam_utils.save_attention_map(filename=layer_output_dir + "/attention_map_" + str(self.gcam_dict['counter']) + "_" + str(j) + "_" + str(k), attention_map=attention_map, heatmap=self.gcam_dict['heatmap'])
+        gcam_utils.save_attention_map(filename=layer_output_dir + "/attention_map_" + str(self.gcam_dict['counter']) + "_" + str(j) + "_" + str(k), attention_map=attention_map, heatmap=self.gcam_dict['heatmap'], raw_input=raw_input)
 
 def _replace_output(self, output, attention_map, data_shape):
     """Replaces the model output with the current attention map."""
