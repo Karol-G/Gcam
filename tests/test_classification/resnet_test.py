@@ -37,7 +37,7 @@ class TestClassification(unittest.TestCase):
 
     def test_gbp(self):
         model = gcam.inject(self.model, output_dir=os.path.join(self.current_path, 'results/resnet152/test_gbp'), backend='gbp',
-                    evaluate=False, save_scores=False, save_maps=True, save_pickle=False, channels=1)
+                    evaluate=False, save_scores=False, save_maps=True, save_pickle=False)
         model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
         for i, batch in enumerate(data_loader):
@@ -53,7 +53,7 @@ class TestClassification(unittest.TestCase):
     def test_gcam(self):
         layer = 'layer4'
         model = gcam.inject(self.model, output_dir=os.path.join(self.current_path, 'results/resnet152/test_gcam'), backend='gcam', layer=layer,
-                    evaluate=False, save_scores=False, save_maps=True, save_pickle=False, channels=1)
+                    evaluate=False, save_scores=False, save_maps=True, save_pickle=False)
         model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
 
@@ -70,7 +70,7 @@ class TestClassification(unittest.TestCase):
     def test_gcam_overlay(self):
         layer = 'layer4'
         model = gcam.inject(self.model, output_dir=os.path.join(self.current_path, 'results/resnet152/test_gcam_overlay'), backend='gcam', layer=layer,
-                    evaluate=False, save_scores=False, save_maps=True, save_pickle=False, channels=1)
+                    evaluate=False, save_scores=False, save_maps=True, save_pickle=False)
         model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
 
@@ -87,7 +87,7 @@ class TestClassification(unittest.TestCase):
     def test_ggcam(self):
         layer = 'layer4'
         model = gcam.inject(self.model, output_dir=os.path.join(self.current_path, 'results/resnet152/test_ggcam'), backend='ggcam', layer=layer,
-                    evaluate=False, save_scores=False, save_maps=True, save_pickle=False, channels=1)
+                    evaluate=False, save_scores=False, save_maps=True, save_pickle=False)
         model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
 
@@ -104,7 +104,7 @@ class TestClassification(unittest.TestCase):
     def test_gcampp(self):
         layer = 'layer4'
         model = gcam.inject(self.model, output_dir=os.path.join(self.current_path, 'results/resnet152/test_gcampp'), backend='gcampp', layer=layer,
-                    evaluate=False, save_scores=False, save_maps=True, save_pickle=False, channels=1)
+                    evaluate=False, save_scores=False, save_maps=True, save_pickle=False)
         model.eval()
         data_loader = DataLoader(self.dataset, batch_size=1, shuffle=False)
 

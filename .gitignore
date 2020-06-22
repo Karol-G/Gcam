@@ -109,3 +109,7 @@ tests/test_classification/tmp_class.py
 tests/test_segmentation/tmp_seg.py
 
 tests/results/
+
+tests/test_classification/results/
+
+tests/test_segmentation/results/

@@ -12,9 +12,9 @@ from gcam.evaluation.evaluator import Evaluator
 import copy
 import numpy as np
 
-def inject(model, output_dir=None, backend='gcam', layer='auto', channels=1, data_shape='default', postprocessor=None, label=None,
+def inject(model, output_dir=None, backend='gcam', layer='auto', label=None, data_shape='default',
            save_maps=False, save_pickle=False, save_scores=False, evaluate=False, metric='wioa', threshold='otsu', retain_graph=False,
-           return_score=False, replace=False, cudnn=True, test_batch=None, enabled=True):
+           return_score=False, replace=False, cudnn=True, enabled=True):
     """
     Injects a model with gcam functionality to extract attention maps from it. The model can be used as usual.
     Whenever model(input) or model.forward(input) is called gcam will extract the corresponding attention maps.
@@ -43,27 +43,14 @@ def inject(model, output_dir=None, backend='gcam', layer='auto', channels=1, dat
 
             Note: Guided-Backpropagation ignores this parameter.
 
-        channels: The number of channels the attention maps should have. Some models (e.g. segmentation models) use the channel dimension for class discrimination. For these models the number of channels should corresponds to the number of classes.
+        label: A class label of interest. Alternatively this can be a class discriminator that creates a mask with only the non masked logits being backwarded through the model.
 
-                'default': The number of channels of the current input data.
+                Example for class label: label=1
+                Example for discriminator: label=lambda x: 0.5 < x
 
         data_shape: The shape of the resulting attention maps. The given shape should exclude batch and channel dimension.
 
                 'default': The shape of the current input data, excluding batch and channel dimension.
-
-        postprocessor: The postprocessor is applied on the model output from calling forward which is then passed to the class discriminator. It converts the raw logit output from the model to a usable form for the class discriminator. The postprocessor is only applied internally, the final output given to the user is not effected.
-
-                None: No postprocessing is applied.
-
-                'sigmoid': Applies the sigmoid function.
-
-                'softmax': Applies softmax function.
-
-                (A function): Applies a given function to the output.
-
-        label: A class discriminator that creates a mask on the postprocessed output. Only the non masked logits are backwarded through the model.
-
-                Example: label=lambda x: 0.5 < x
 
         save_maps: If the attention maps should be saved sorted by layer in the output_dir.
 
@@ -96,8 +83,6 @@ def inject(model, output_dir=None, backend='gcam', layer='auto', channels=1, dat
         replace: If the model output should be replaced with the extracted attention map.
 
         cudnn: If cudnn should be disabled. Some models (e.g. LSTMs) crash when using gcam with enabled cudnn.
-
-        test_batch: A test input. This allows gcam to determine compatible layers.
 
         enabled: If gcam should be enabled.
 
@@ -136,7 +121,7 @@ def inject(model, output_dir=None, backend='gcam', layer='auto', channels=1, dat
     gcam_dict['_replace_output'] = replace
     gcam_dict['threshold'] = threshold
     gcam_dict['label'] = label
-    gcam_dict['channels'] = channels
+    gcam_dict['channels'] = 1  # TODO: Remove in a later version
     gcam_dict['data_shape'] = data_shape
     gcam_dict['pickle_maps'] = []
     if evaluate:
@@ -167,11 +152,9 @@ def inject(model, output_dir=None, backend='gcam', layer='auto', channels=1, dat
     model_clone._save_attention_map = types.MethodType(_save_attention_map, model_clone)
     model_clone._replace_output = types.MethodType(_replace_output, model_clone)
 
-    model_backend, heatmap = _assign_backend(backend, model_clone, layer, postprocessor, retain_graph)
+    model_backend, heatmap = _assign_backend(backend, model_clone, layer, None, retain_graph)  # TODO: Remove postprocessor in a later version
     gcam_dict['model_backend'] = model_backend
     gcam_dict['heatmap'] = heatmap
-
-    model_clone.test_run(test_batch)
 
     return model_clone
 

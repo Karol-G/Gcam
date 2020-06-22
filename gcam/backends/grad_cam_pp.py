@@ -36,7 +36,8 @@ class GradCamPP(GradCAM):
         elif len(mask.shape) == 1:  # Classification best/index
             prob_weights = self.logits.squeeze()[torch.argmax(mask)]
         else:  # Segmentation
-            prob_weights = gcam_utils.interpolate(self.logits, grads.shape[2:])  # TODO: Still removes channels...
+            masked_logits = self.logits * self.mask
+            prob_weights = gcam_utils.interpolate(masked_logits, grads.shape[2:])  # TODO: Still removes channels...
 
         positive_gradients = F.relu(torch.mul(prob_weights.exp(), grads))
         weights = (alpha * positive_gradients).view(B, C, -1).sum(-1)
