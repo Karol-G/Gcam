@@ -37,61 +37,82 @@ class _BaseWrapper():
         if label is None:
             label = self.model.gcam_dict['label']
 
-        processed_logits = self.post_processing(self.postprocessor, self.logits)
-        self.mask = self._mask_output(processed_logits, label)
-
-        if self.mask is None:
-            self.logits.backward(gradient=self.logits, retain_graph=self.retain_graph)
-        else:
-            self.logits.backward(gradient=self.mask, retain_graph=self.retain_graph)
+        # processed_logits = self.post_processing(self.postprocessor, self.logits)
+        # self.mask = self._mask_output(processed_logits, label)
+        #
+        # if self.mask is None:
+        #     self.logits.backward(gradient=self.logits, retain_graph=self.retain_graph)
+        # else:
+        #     self.logits.backward(gradient=self.mask, retain_graph=self.retain_graph)
+        self.logits = self._isolate_class(self.logits, label)
+        self.logits.backward(gradient=self.logits, retain_graph=self.retain_graph)
         self.remove_hook(forward=True, backward=True)
 
-    def post_processing(self, postprocessor, output):
-        """The postprocessor is applied on the model output from calling forward which is then passed to the class discriminator. It converts the raw logit output from the model to a usable form for the class discriminator. The postprocessor is only applied internally, the final output given to the user is not effected.
+    # def post_processing(self, postprocessor, output):
+    #     """The postprocessor is applied on the model output from calling forward which is then passed to the class discriminator. It converts the raw logit output from the model to a usable form for the class discriminator. The postprocessor is only applied internally, the final output given to the user is not effected.
+    #
+    #                 None: No postprocessing is applied.
+    #
+    #                 'sigmoid': Applies the sigmoid function.
+    #
+    #                 'softmax': Applies softmax function.
+    #
+    #                 (A function): Applies a given function to the output.
+    #
+    #     """
+    #     if postprocessor is None:
+    #         return output
+    #     elif postprocessor == "sigmoid":
+    #         output = torch.sigmoid(output)
+    #     elif postprocessor == "softmax":
+    #         output = F.softmax(output, dim=1)
+    #     elif callable(postprocessor):
+    #         output = postprocessor(output)
+    #     else:
+    #         raise ValueError("Postprocessor must be either None, 'sigmoid', 'softmax' or a postprocessor function")
+    #     return output
 
-                    None: No postprocessing is applied.
+    # def _mask_output(self, output, label):
+    #     """Creates a binary mask that is later applied to the postprocessed output."""
+    #     if label is None:
+    #         return None
+    #     elif label == "best":  # Only for classification
+    #         indices = torch.argmax(output).detach().cpu().numpy()
+    #         mask = np.zeros(output.shape)
+    #         np.put(mask, indices, 1)
+    #         # indices = torch.argmax(output).unsqueeze(0).unsqueeze(0)
+    #         # mask = torch.zeros_like(self.logits).to(self.device)
+    #         # mask.scatter_(1, indices, 1.0)
+    #     elif isinstance(label, int):  # Only for classification
+    #         indices = (output == label).nonzero()
+    #         indices = [index[0] * output.shape[1] + index[1] for index in indices]
+    #         mask = np.zeros(output.shape)
+    #         np.put(mask, indices, 1)
+    #     elif callable(label):  # Can be used for everything, but is best for segmentation 2D/3D
+    #         mask = label(output).detach().cpu().numpy()
+    #     else:
+    #         raise ValueError("Label must be either None, 'best', a class label index or a discriminator function")
+    #     mask = torch.FloatTensor(mask).to(self.device)
+    #     return mask
 
-                    'sigmoid': Applies the sigmoid function.
-
-                    'softmax': Applies softmax function.
-
-                    (A function): Applies a given function to the output.
-
-        """
-        if postprocessor is None:
+    def _isolate_class(self, output, label):  # TODO: Change output or create mask?
+        if label is None:
             return output
-        elif postprocessor == "sigmoid":
-            output = torch.sigmoid(output)
-        elif postprocessor == "softmax":
-            output = F.softmax(output, dim=1)
-        elif callable(postprocessor):
-            output = postprocessor(output)
-        else:
-            raise ValueError("Postprocessor must be either None, 'sigmoid', 'softmax' or a postprocessor function")
+        if label == "best":
+            if self.output_batch_size > 1:
+                raise RuntimeError("Best label mode works only with a batch size of one. You need to choose a specific label or None with a batch size bigger than one.")
+            B, C, *data_shape = output.shape
+            if len(data_shape) > 0:
+                _output = output.view(B, C, -1)
+                _output = torch.sum(_output, dim=2)
+                label = torch.argmax(_output, dim=1).item()
+            else:
+                label = torch.argmax(output, dim=1).item()
+        for i in range(output.shape[1]):
+            if i != label:
+                output[:, i] = 0
         return output
 
-    def _mask_output(self, output, label):
-        """Creates a binary mask that is later applied to the postprocessed output."""
-        if label is None:
-            return None
-        elif label == "best":  # Only for classification
-            indices = torch.argmax(output).detach().cpu().numpy()
-            mask = np.zeros(output.shape)
-            np.put(mask, indices, 1)
-            # indices = torch.argmax(output).unsqueeze(0).unsqueeze(0)
-            # mask = torch.zeros_like(self.logits).to(self.device)
-            # mask.scatter_(1, indices, 1.0)
-        elif isinstance(label, int):  # Only for classification
-            indices = (output == label).nonzero()
-            indices = [index[0] * output.shape[1] + index[1] for index in indices]
-            mask = np.zeros(output.shape)
-            np.put(mask, indices, 1)
-        elif callable(label):  # Can be used for everything, but is best for segmentation 2D/3D
-            mask = label(output).detach().cpu().numpy()
-        else:
-            raise ValueError("Label must be either None, 'best', a class label index or a discriminator function")
-        mask = torch.FloatTensor(mask).to(self.device)
-        return mask
 
     def _extract_metadata(self, input, output):  # TODO: Does not work for classification output (shape: (1, 1000)), merge with the one in gcam_inject
         """Extracts metadata like batch size, number of channels and the data shape from the output batch."""
