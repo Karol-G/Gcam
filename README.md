@@ -4,7 +4,7 @@
 [![PyPI version](https://badge.fury.io/py/gcam.svg)](https://badge.fury.io/py/gcam)
 ![Python package](https://github.com/Karol-G/Gcam/workflows/Python%20package/badge.svg)
 
-** New version of this repo at https://github.com/MECLabTUDA/M3d-Cam **
+**New version of this repo at https://github.com/MECLabTUDA/M3d-Cam**
 
 Gcam is an easy to use Pytorch library that makes model predictions more interpretable for humans. 
 It allows the generation of attention maps with multiple methods like Guided Backpropagation, 
